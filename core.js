@@ -255,11 +255,21 @@ extend(root.object, obj(null, null, {
         if (name === "__map__")
             return this.map;
 
-        var offset = send(this.map, "lookup", name);
-        if (offset !== undefined)
-            return this.values[offset];
-        else
-            return undefined;
+        var offset;
+        var obj = this;
+
+        while (obj !== null)
+        {
+            offset = send(obj.map, "lookup", name);
+
+            if (offset !== undefined)
+                return obj.values[offset];
+            else
+                obj = obj.prototype;
+
+        }
+
+        return undefined;
     },
     "__init__":function () {
         return {

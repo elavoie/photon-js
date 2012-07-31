@@ -21,24 +21,21 @@ function init() {
             // Prefixing with ' ' to avoid clash with meta-methods
             // which would modify the behavior of call_dict object
             call_dict[" " + name] = true; 
+            flag = true;
 
             if (name === "bar")
             {
-                flag = true;
                 return bar;
-            } else
-            {
-                flag = true;
-            }
+            } 
         } 
-        
-        return l.__call__(this, l, name);   
+
+        return l.__call__(this, l, name);
     };
 
     // Example code
     for (var i = 0; i < 3; ++i)
     {
-        {foo:1, bar:function () {}}.bar();
+        {foo:1, bar:function () {print("bar");}}.bar();
 
     }
 
