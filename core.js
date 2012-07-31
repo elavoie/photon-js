@@ -22,7 +22,6 @@ var root = {
     "__clone__", 
     "__delete__",
     "__get__",
-    "__init__",
     "__itr__",
     "__new__",
     "__set__",
@@ -131,7 +130,7 @@ function obj(proto, payload, props)
         // the simulated object model
         if (typeof v === "function")
         {
-            values[offsets[p]] = clos((function(p, v) 
+            values[offsets[p]] = bs_clos((function(p, v) 
             {
                 return function ($this, $closure)
                 {
@@ -204,12 +203,16 @@ function objMap(props)
     };
 }
 
-function clos(f, cells)
+function bs_clos(f)
 {
-    if (cells === undefined)
-        cells = [];
+    return obj(root.function, {code:f, cells:[]});
+}
 
-    return obj(root.function, {code:f, cells:cells});
+function clos(f)
+{
+    var g = send(root.function, "__new__");
+    g.payload.code = f;
+    return g;
 }
 
 function extend(obj, props)
@@ -227,12 +230,10 @@ function unimplemented(name)
 
 extend(root.object, obj(null, null, {
     "__clone__":function () {
-        var clone = send(this, "__init__");
+        var clone = obj(this, null);
         clone.map       = this.map;
         clone.prototype = this.prototype;
         clone.values    = copy(this.values);
-        clone.payload   = null;
-
         return clone;
     },
     "__delete__":function () {
@@ -270,14 +271,6 @@ extend(root.object, obj(null, null, {
         }
 
         return undefined;
-    },
-    "__init__":function () {
-        return {
-            values:[],
-            map:null,
-            prototype:null,
-            payload:null
-        };
     },
     "__itr__":function () {
         var _obj     = this;
@@ -335,10 +328,7 @@ extend(root.object, obj(null, null, {
         }), "init");
     },
     "__new__":function () {
-        var newObj = send(this, "__init__");
-        newObj.map = objMap(); 
-        newObj.prototype = this;
-        return newObj;
+        return obj(this, null);
     },
     "__set__":function (name, value) {
         var offset = send(this.map, "lookup", name);
@@ -476,6 +466,10 @@ root.map.payload = root.map.map.payload;
 root.map.map = root.map;
 
 extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
+    "__new__":function ()
+    {
+        return obj(root.function, {code:null, cells:[]});
+    },
     "__str__":function ()
     {
         return String(this.payload.code);
@@ -501,7 +495,7 @@ extend(root.primitive, obj(root.object, null, {
     {
         return "primitive";
     },
-    "__str__":clos(function ($this) {
+    "__str__":bs_clos(function ($this) {
         return String($this);
     })
 })); 
@@ -523,11 +517,7 @@ extend(root.array, obj(root.object, [], {
         }
     },
     "__new__":function () {
-        var newArr = send(this, "__init__");
-        newArr.map = objMap(); 
-        newArr.prototype = this;
-        newArr.payload = [];
-        return newArr;
+        return obj(this, []);
     },
     "__set__":function (name, value) {
         if (typeof name === "number" && name >= 0)
@@ -566,11 +556,11 @@ try
     root.global = send(root.object, "__new__");
 
     //print("Initializing global object");
-    send(root.global, "__set__", "print", clos(function ($this, $closure, s) { 
+    send(root.global, "__set__", "print", bs_clos(function ($this, $closure, s) { 
         print(send(s, "__str__")); 
     }));
 
-    send(root.global, "__set__", "inspect", clos(function ($this, $closure, s, max) { 
+    send(root.global, "__set__", "inspect", bs_clos(function ($this, $closure, s, max) { 
         if (max === undefined)
             max = 0;
 
