@@ -236,7 +236,7 @@ extend(root.object, obj(null, null, {
         clone.values    = copy(this.values);
         return clone;
     },
-    "__delete__":function () {
+    "__delete__":function (name) {
         var offset = send(this.map, "lookup", name);
         if (offset === undefined)
         {
@@ -349,6 +349,10 @@ extend(root.object, obj(null, null, {
     "__str__":function ()
     {
         return "[object Object]";    
+    },
+    "hasOwnProperty":function (name)
+    {
+        return send(this.map, "lookup", name) !== undefined;
     }
 }));
 
