@@ -53,8 +53,13 @@ function assert(bool, msg)
 
     if (bool !== true)
     {
-        throw msg;
+        error(msg);
     }
+}
+
+function error(msg)
+{
+    throw new Error(msg);
 }
 
 function isPrimitive(x)
@@ -98,7 +103,7 @@ function send(rcv, msg) {
 
     if (typeof method.payload.code !== "function")
     {
-        throw "Invalid method implementation";
+        error("Invalid method implementation");
     }
 
     var args = [rcv, method].concat(Array.prototype.slice.call(arguments, 2).map(function (x) {
@@ -110,7 +115,7 @@ function send(rcv, msg) {
             return x.toString();
         } else
         {
-            throw "Invalid object type '" + typeof x + "' for object '" + x + "' in send '" + String(msg) + "'";
+            error("Invalid object type '" + typeof x + "' for object '" + x + "' in send '" + String(msg) + "'");
         }
     }));
     return method.payload.code.apply(rcv, args);
@@ -146,7 +151,7 @@ function obj(proto, payload, props)
             values[offsets[p]] = v;
         } else
         {
-            throw "invalid property value";
+            error("invalid property value");
         }
     }
 
@@ -470,6 +475,29 @@ root.map.payload = root.map.map.payload;
 root.map.map = root.map;
 
 extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
+    "__ctor__":bs_clos(function ($this, $closure)
+    {
+        var o = send(send($this, "__get__", "prototype"), "__new__"); 
+        var r = $this.payload.code.apply(o, [o, $closure].concat(Array.prototype.slice.call(arguments, 2)));
+
+        if (send(r, "__type__") === "primitive")
+            return o;
+        else
+            return r;
+    }),
+    "__get__":function (name)
+    {
+        // Lazy creation of the prototype property
+        if (name === "prototype" && !send(this, "hasOwnProperty", "prototype"))
+        {
+            var o = send(root.object, "__new__");
+            return send(this, "__set__", name, o);
+        } else
+        {
+            return send(send(root.object, "__get__", "__get__"), "call", this, name); 
+        }
+        
+    },
     "__new__":function ()
     {
         return obj(root.function, {code:null, cells:[]});
@@ -495,13 +523,19 @@ extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
 }));
 
 extend(root.primitive, obj(root.object, null, { 
+    "__set__":bs_clos(function ($this, $closure, name, value) {
+        //if (isPrimitive(this))
+        error("TypeError: Invalid __set__ operation on primitive value '" + $this + "'");
+        //else
+        //    return send(send(root.object, "__get__", "__set__"), "call", this, name, value); 
+    }),
+    "__str__":bs_clos(function ($this) {
+        return String($this);
+    }),
     "__type__":function ()
     {
         return "primitive";
-    },
-    "__str__":bs_clos(function ($this) {
-        return String($this);
-    })
+    }
 })); 
 
 extend(root.array, obj(root.object, [], {
@@ -696,7 +730,7 @@ try
 
                     break;
                 default:
-                    throw new Exception("Invalid photon object type");
+                    error("Invalid photon object type");
             }
 
             indentLvl--;

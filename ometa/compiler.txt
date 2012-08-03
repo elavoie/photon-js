@@ -497,6 +497,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                         [#begin].concat(r.slice(1)),
                                                                         e,
                                                                         [#begin, 
+                                                                            [#code, "print(" + e + ".stack)"],
                                                                             [#call, [#get, "print"], [#string, "Unhandled exception:"]],
                                                                             [#call, [#get, "print"], [#get, e]],
                                                                             [#throw, [#get, e]]],
@@ -595,6 +596,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                                 .concat([body])
                                                                                 .concat([[#send, "next", [#get, it]]])],
                                                                         [#get, "undefined"]]]},
+  /*
   new      trans:fn trans*:args                               -> {var o = gensym(); var r = gensym(); var f = gensym();
                                                                   [#let, _new_context(),
                                                                       [#begin, 
@@ -610,6 +612,8 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                                   [#string, "object"]],
                                                                               [#get, r],
                                                                               [#get, o]]]]},
+  */
+  new      trans:fn trans*:args                               -> [#send, "__ctor__", fn].concat(args),
   json     trans*:props                                       -> {var o = gensym();
                                                                   [#let, _new_context(), 
                                                                     [#begin, [#var, o, [#send, "__new__", [#ref, "root.object"]]]],
