@@ -1,0 +1,6 @@
+*.swo
+*.swp
+*~
+listings
+ometa/compiler.js
+temp.js
