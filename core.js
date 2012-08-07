@@ -401,7 +401,7 @@ extend(root.map, obj(root.object, {}, {
 
         for (var p in this.payload.properties)
         {
-            if (this.payload.properties.hasOwnProperty(p))
+            if (Object.prototype.hasOwnProperty.call(this.payload.properties, p))
             {
                 props.push(p);       
             }
@@ -453,7 +453,10 @@ extend(root.map, obj(root.object, {}, {
         return newMap; 
     },
     "lookup":function (name) {
-        return this.payload.properties[name]; 
+        if (Object.prototype.hasOwnProperty.call(this.payload.properties, name))
+            return this.payload.properties[name]; 
+        else
+            return undefined;
     },
     "remove":function (name) {
         var newMap = send(this, "__clone__");
@@ -568,6 +571,9 @@ extend(root.array, obj(root.object, [], {
         if (typeof name === "number" && name >= 0)
         {
             return this.payload[name];                
+        } else if (name === "length")
+        {
+            return this.payload.length;
         } else
         {
             return send(send(root.object, "__get__", "__get__"), "call", this, name); 
@@ -594,8 +600,11 @@ extend(root.array, obj(root.object, [], {
         return String(this.payload.map(function (x) { return send(x, "__str__"); }).join(","));
     },
     "push":function (value) {
-        return send(this, "__set__", this.payload.length, value);
+        return this.payload.push(value);
     },
+    "pop":function (value) {
+        return this.payload.pop();
+    }
 }));
 
 extend(root.cell, obj(root.object, undefined, {
@@ -609,15 +618,20 @@ extend(root.cell, obj(root.object, undefined, {
 
 try
 {
-    print("Creating global object");
+    //print("Creating global object");
     root.global = send(root.object, "__new__");
 
-    print("Initializing global object");
+    //print("Initializing global object");
     send(root.global, "__set__", "print", bs_clos(function ($this, $closure, s) { 
         print(send(s, "__str__")); 
     }));
 
-    print("Adding an inspection function");
+    send(root.global, "__set__", "error", bs_clos(function ($this, $closure, s)
+    {
+        throw new Error(s);
+    }));
+
+    //print("Adding an inspection function");
     send(root.global, "__set__", "inspect", bs_clos(function ($this, $closure, s, max) { 
         if (max === undefined)
             max = 0;
@@ -735,7 +749,7 @@ try
                     indentLvl++;
                     for (var p in obj.payload.properties)
                     {
-                        if (obj.payload.properties.hasOwnProperty(p))
+                        if (Object.prototype.hasOwnProperty.call(obj.payload.properties, p))
                         {
                             out(p + ":" + obj.payload.properties[p]);
                         }
@@ -763,7 +777,7 @@ try
         print(strOutput.join("\n"));
     }));
 
-    print("Exposing root objects on the global object");
+    //print("Exposing root objects on the global object");
     var env = send(root.object, "__new__");
     send(root.global, "__set__", "root", env); 
     send(env, "__set__", "array",    root.array);

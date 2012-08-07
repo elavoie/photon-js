@@ -388,10 +388,10 @@ ometa PhotonParser <: Parser {
                | "continue" sc                                                       -> [#continue]
                | "throw" spacesNoNl expr:e sc                                        -> [#throw, e]
                | "try" block:t 
-                    ("catch" "(" ("name":e | (empty -> undefined):e) ")" block:c
+                    ("catch" "(" ("name" | (empty -> undefined)):e ")" block:c
                              ( "finally" block
                              | empty -> [#get, 'undefined'] ):f
-                    | "finally" block:f (empty -> [#get, 'undefined']):c (empty -> undefined):e)
+                    | "finally" block:f (empty -> [#begin]):c (empty -> undefined):e)
                                                                                      -> [#try, _new_context(), t, e, c, f]
                | "return" ( expr
                           | empty -> [#get, 'undefined'] ):e sc                      -> [#return, e]
@@ -779,7 +779,9 @@ ometa PhotonVarScopeBinding <: PhotonASTCopy {
                                                                        [#begin, [#var, f, [#func, args, ctxt, body]]],
                                                                        [#begin]
                                                                        .concat(self.context.gen_cell_capture(cs, os, f))
-                                                                       .concat([[#send, "__set__", [#get, f], [#string, "length"], [#number, args.length]], [#get, f]])]},
+                                                                       .concat([[#send, "__set__", [#get, f], [#string, "length"], [#number, args.length]], 
+                                                                                [#send, "__set__", [#get, f], [#string, "__id__"], [#string, String(ctxt.name)]],
+                                                                                [#get, f]])]},
   try :ctxt trans:x :name 
             {self.context.enter_let_scope(ctxt.scope)} 
             {self.context.scope._escaping}:es
@@ -1003,7 +1005,8 @@ ometa PhotonJSCodeGen {
   send     #__call__ trans:recv trans*:args                        -> (recv + ".payload.code(" + args.join(", ") +  ")"),
   send     :msg trans:recv trans*:args                             -> ("send(" + [recv, '"' + msg + '"'].concat(args).join(", ") +  ")"),
   throw    trans:x                                                 -> ("throw " +  x),
-  try      :ctxt block:x :name block:c block:f                     -> ("try\n" + x + " catch (" + name + ")\n" + c ),
+  try      :ctxt block:x :name ?(name === undefined) block:c block:f -> ("try\n" + x + " finally\n" + f ),
+  try      :ctxt block:x :name block:c block:f                     -> ("try\n" + x + " catch (" + name + ")\n" + c + "finally\n" + f),
   switch   trans:x inc trans*:cases dec                            -> ("switch (" +  x +  ")\n" +  self.ilvl() +  "{\n" +  cases.join("\n") +  self.ilvl() +  "}"),
   case     trans:x inc block:y dec                                 -> (self.ilvl() + "case " +  x +  ":\n" + y),
   default          inc block:y dec                                 -> (self.ilvl() + "default:\n" +  y),
