@@ -98,6 +98,11 @@ function bind(msg, rcv) {
     throw new Error(str);
 }
 
+function getProp(obj, name)
+{
+    return obj.values[obj.map.payload.properties[name]];
+}
+
 function send(rcv, msg) {
     var method = bind(msg, rcv);
 
@@ -118,7 +123,21 @@ function send(rcv, msg) {
             error("Invalid object type '" + typeof x + "' for object '" + x + "' in send '" + String(msg) + "'");
         }
     }));
-    return method.payload.code.apply(rcv, args);
+    
+    //return method.payload.code.apply(null, args);
+
+    if ((rcv     === getProp(root.function, "call") && msg === "call") ||
+        (!isPrimitive(rcv) && rcv.map === rcv.map.map && msg === "lookup"))
+    {
+        //print("---> Base case occurred for msg '" + msg + "'");
+        return method.payload.code.apply(null, args); 
+    } else
+    {
+        //print("Regular case for msg '" + msg + "'");
+        //return method.payload.code.apply(null, args); 
+        args = [method, "call", rcv].concat(args.slice(2));
+        return send.apply(null, args);
+    }
 }
 
 function obj(proto, payload, props)
@@ -590,14 +609,15 @@ extend(root.cell, obj(root.object, undefined, {
 
 try
 {
-    //print("Creating global object");
+    print("Creating global object");
     root.global = send(root.object, "__new__");
 
-    //print("Initializing global object");
+    print("Initializing global object");
     send(root.global, "__set__", "print", bs_clos(function ($this, $closure, s) { 
         print(send(s, "__str__")); 
     }));
 
+    print("Adding an inspection function");
     send(root.global, "__set__", "inspect", bs_clos(function ($this, $closure, s, max) { 
         if (max === undefined)
             max = 0;
@@ -743,7 +763,7 @@ try
         print(strOutput.join("\n"));
     }));
 
-    // Expose root objects on the global object
+    print("Exposing root objects on the global object");
     var env = send(root.object, "__new__");
     send(root.global, "__set__", "root", env); 
     send(env, "__set__", "array",    root.array);
