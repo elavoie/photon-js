@@ -8,6 +8,7 @@
 // - print a textual representation of the object at a high-level for debugging the application behavior
 
 var root = {
+    arguments:{},
     array:{},
     cell:{},
     function:{},
@@ -185,6 +186,11 @@ function obj(proto, payload, props)
         // Object payload
         payload:payload
     };
+}
+
+function arr(payload)
+{
+    return obj(root.array, payload);
 }
 
 function indentStr(current)
@@ -591,19 +597,80 @@ extend(root.array, obj(root.object, [], {
             return send(send(root.object, "__get__", "__set__"), "call", this, name, value); 
         }
     },
-    "__type__":function ()
-    {
+    "__type__":function () {
         return "array";
     },
-    "__str__":function ()
-    {
+    "__str__":function () {
         return String(this.payload.map(function (x) { return send(x, "__str__"); }).join(","));
+    },
+    "concat":function (arr2) {
+        assert(send(arr2, "__type__") === "array");
+        return arr(this.payload.concat(arr2.payload));
     },
     "push":function (value) {
         return this.payload.push(value);
     },
     "pop":function (value) {
         return this.payload.pop();
+    }
+}));
+
+extend(root.arguments, obj(root.object, [], {
+    "__clone__":function () {
+        unimplemented("__clone__");
+    },
+    "__delete__":function () {
+        unimplemented("__delete__");
+    },
+    "__get__":function (name) {
+        if (typeof name === "number" && name >= 0)
+        {
+            return this.payload[name].payload;                
+        } else if (name === "length")
+        {
+            return this.payload.length;
+        } else
+        {
+            return send(send(root.object, "__get__", "__get__"), "call", this, name); 
+        }
+    },
+    "__get_cell__":function (name) {
+        if (typeof name === "number" && name >= 0)
+        {
+            return this.payload[name];                
+        } else if (name === "length")
+        {
+            return this.payload.length;
+        } else
+        {
+            error("Invalid index");
+        }
+    },
+    "__new__":function (length) {
+        var payload = [];
+        for (var i = 0; i < length; ++i)
+        {
+            payload.push(send(root.cell, "__new__", undefined));    
+        }
+        return obj(this, payload);
+    },
+    "__set__":function (name, value) {
+        if (typeof name === "number" && name >= 0)
+        {
+            if (name < this.payload.length)
+                return this.payload[name].payload = value;                
+            else
+                error("Invalid index");
+        } else
+        {
+            return send(send(root.object, "__get__", "__set__"), "call", this, name, value); 
+        }
+    },
+    "__type__":function () {
+        return "arguments";
+    },
+    "__str__":function () {
+        return String(this.payload.map(function (x) { return send(x.payload, "__str__"); }).join(","));
     }
 }));
 
@@ -707,6 +774,16 @@ try
             switch(type)
             {
                 case "array":
+                    out("[");
+                    indentLvl++;
+                    for (var i = 0; i < obj.payload.length; ++i)
+                    {
+                        helper(obj.payload[i], nestingLvl+1, true);
+                    }
+                    indentLvl--;
+                    out("]");
+                    break;
+                case "arguments":
                     out("[");
                     indentLvl++;
                     for (var i = 0; i < obj.payload.length; ++i)

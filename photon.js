@@ -1,17 +1,17 @@
-photon.compile = function (s)
+photon.compile = function (s, verbose)
 {
     var ast = PhotonParser.matchAll(s, "topLevel");
-    //print("MacroExp");
+    if (verbose) print("MacroExp");
     ast = PhotonMacroExp.match(ast, "trans");
-    //print("Desugar");
+    if (verbose) print("Desugar");
     ast = PhotonDesugar.match(ast, "trans");
-    //print("VarAnalysis");
+    if (verbose) print("VarAnalysis");
     ast = PhotonVarAnalysis.match(ast, "trans");
-    //print("VarScopeBinding");
+    if (verbose) print("VarScopeBinding");
     ast = PhotonVarScopeBinding.match(ast, "trans");
-    //print("LetConv");
+    if (verbose) print("LetConv");
     ast = PhotonLetConv.match(ast, "trans");
-    //print("JSCodeGen");
+    if (verbose) print("JSCodeGen");
     var code = PhotonJSCodeGen.match(ast, "trans");
     //print(code);
     return code;
@@ -41,12 +41,21 @@ photon.eval = function (s)
 // --------------- Main --------------------
 
 var src = "";
+var files = [];
 for (var i = 0; i < arguments.length; ++i)
+{
+    if (arguments[i] === "-v")
+        var verbose = true;
+    else
+        files.push(arguments[i]);
+}
+
+for (var i = 0; i < files.length; ++i)
 {
     try
     {
-        src += "// " + arguments[i] + "\n";
-        src += photon.compile(readFile(arguments[i])) + "\n"; 
+        src += "// " + files[i] + "\n";
+        src += photon.compile(readFile(files[i]), verbose) + "\n"; 
     } catch(e)
     {
         if (e.stack !== undefined)
