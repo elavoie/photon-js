@@ -190,7 +190,9 @@ function obj(proto, payload, props)
 
 function arr(payload)
 {
-    return obj(root.array, payload);
+    var a = obj(root.array, payload);
+    a.type = "array";
+    return a;
 }
 
 function indentStr(current)
@@ -256,6 +258,20 @@ function extend(obj, props)
 function unimplemented(name)
 {
     throw "Unimplemented '" + name + "' operation";
+}
+
+function __$apply__(fn, obj, args) {
+    if (args.type === "arguments") {
+        args = args.payload.map(function (x) {
+            return x.payload;
+        });
+    } else if (args.type === "array") {
+        args = args.payload;
+    } else {
+        error("Invalid args type '" + args.type + "'");
+    }
+
+    return fn.payload.code.apply(null, [obj, fn].concat(args));
 }
 
 extend(root.object, obj(null, null, {
@@ -540,8 +556,8 @@ extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
     },
     "apply":function (rcv, args)
     {
-        assert(typeof this.payload.code === "function");
-        return this.payload.code.apply(null, [rcv, this].concat(args));
+        assert((typeof this.payload.code) === "function" && (args.type === "array"));
+        return this.payload.code.apply(null, [rcv, this].concat(args.payload));
     },
     "call":function ()
     {
@@ -586,7 +602,9 @@ extend(root.array, obj(root.object, [], {
         }
     },
     "__new__":function () {
-        return obj(this, []);
+        var a = obj(this, []);
+        a.type = "array";
+        return a;
     },
     "__set__":function (name, value) {
         if (typeof name === "number" && name >= 0)
@@ -652,7 +670,9 @@ extend(root.arguments, obj(root.object, [], {
         {
             payload.push(send(root.cell, "__new__", undefined));    
         }
-        return obj(this, payload);
+        var o = obj(this, payload);
+        o.type = "arguments";
+        return o;
     },
     "__set__":function (name, value) {
         if (typeof name === "number" && name >= 0)
@@ -699,7 +719,7 @@ try
     }));
 
     //print("Adding an inspection function");
-    send(root.global, "__set__", "inspect", bs_clos(function ($this, $closure, s, max) { 
+    var inspect_fn = bs_clos(function ($this, $closure, s, max) { 
         if (max === undefined)
             max = 0;
 
@@ -852,7 +872,13 @@ try
         helper(s, 0);
 
         print(strOutput.join("\n"));
-    }));
+    });
+    send(root.global, "__set__", "inspect", inspect_fn);
+
+    function inspect(obj, lvl)
+    {
+        return inspect_fn.payload.code(null, inspect_fn, obj, lvl);
+    }
 
     //print("Exposing root objects on the global object");
     var env = send(root.object, "__new__");
@@ -863,6 +889,7 @@ try
     send(env, "__set__", "map",      root.map);
     send(env, "__set__", "mapMap",   root.mapMap);
     send(env, "__set__", "function", root.function);
+    send(env, "__set__", "global",   root.global);
 } catch (e)
 {
     if (e.stack)

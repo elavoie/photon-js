@@ -60,6 +60,7 @@ ometa PhotonASTTraversal {
   closure end,
   arguments trans:i,
   arguments_length end,
+  arguments_slice trans:i end,
   closureRef trans:fn trans:offset,
   closureRefValue trans:fn trans:offset,
   getCell  :id,
@@ -123,6 +124,7 @@ ometa PhotonASTCopy {
   closure end                                   -> [#closure],
   arguments trans:i                             -> [#arguments, i],
   arguments_length end                          -> [#arguments_length],
+  arguments_slice trans:i end                   -> [#arguments_slice, i],
   closureRef trans:fn trans:offset              -> [#closureRef, fn, offset],
   closureRefValue trans:fn trans:offset         -> [#closureRefValue, fn, offset],
   getCell  :id                                  -> [#getCell, id],
@@ -343,6 +345,7 @@ ometa PhotonParser <: Parser {
                | "$closure"                                                          -> [#closure]
                | "$arguments" "[@" expr:i "]"                                        -> [#arguments, i]
                | "$arguments_length"                                                 -> [#arguments_length]
+               | "$arguments_slice" "(" expr:i ")"                                  -> [#arguments_slice, i]
                | "name":n                                                            -> [#get, n]
                | "number":n                                                          -> [#number, n]
                | "string":s                                                          -> [#string, s]
@@ -417,7 +420,7 @@ PhotonParser.initialize = function ()
                 "else", "finally", "for", "function", "if", "in", "instanceof", 
                 "new", "return", "switch", "this", "throw", "try", "typeof", "var", 
                 "void", "while", "with", "ometa", "const", "global_return", "macro", 
-                "super", "let", "$closure", "$arguments", "$arguments_length"];
+                "super", "let", "$closure", "$arguments", "$arguments_length", "$arguments_slice"];
     for (var idx = 0; idx < keywords.length; idx++)
     {
       this.keywords[keywords[idx]] = true
@@ -1007,7 +1010,11 @@ ometa PhotonJSCodeGen {
   func     :args :ctxt block:body                                  -> ("clos(function (" + ["$this", "$closure"].concat(args).join(",") +  ")\n" + body + ")"),
   //call     trans:fn trans*:args                                    -> ("(function ($closure) {" + "return $closure.payload.code(" + ["root.global", "$closure"].concat(args).join(", ") +  ");})(" + fn + ")"),
   call     trans:fn trans*:args                                    -> ("(function ($closure) {" + "return send(" + ["$closure", '"call"', "root.global"].concat(args).join(", ") +  ");})(" + fn + ")"),
-  send     #__call__ trans:recv trans*:args                        -> (recv + ".payload.code(" + args.join(", ") +  ")"),
+  send     #__$call__  trans:recv trans*:args                      -> {var syms = args.map(function (x) { return gensym(); }); 
+                                                                      ("(function (" + ["$closure"].concat(syms).join(", ") + ") {" + "return $closure.payload.code(" + 
+                                                                            [syms[0], "$closure"].concat(syms.slice(1)).join(", ") +  
+                                                                       ");})(" + [recv].concat(args).join(", ") +  ")")},
+  send     #__$apply__ trans:recv trans*:args                      -> ("__$apply__(" + recv + ", " + args[0] + ", " + args[1] +  ")"),
   send     :msg trans:recv trans*:args                             -> ("send(" + [recv, '"' + msg + '"'].concat(args).join(", ") +  ")"),
   throw    trans:x                                                 -> ("throw " +  x),
   try      :ctxt block:x :name ?(name === undefined) block:c block:f -> ("try\n" + x + " finally\n" + f ),
@@ -1023,6 +1030,7 @@ ometa PhotonJSCodeGen {
   precode  :s trans:x                                              -> (s + x),
   arguments_length                                                 -> ("arguments.length - 2"),
   arguments trans:i                                                -> ("arguments[" + i + "+2]"),
+  arguments_slice trans:i                                          -> ("arr(Array.prototype.slice.call(arguments, " + i + "+2))"),
   igetp    trans:x trans:fd                                        -> (x + "[" + fd + "]")
 }
 
