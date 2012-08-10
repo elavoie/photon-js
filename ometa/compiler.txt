@@ -343,7 +343,7 @@ ometa PhotonParser <: Parser {
                | "(" listOf(#expr, ','):es ")"                                       -> (es.length === 1 ? es[0] : [#begin].concat(es))
                | "this"                                                              -> [#this]
                | "$closure"                                                          -> [#closure]
-               | "$arguments" "[@" expr:i "]"                                        -> [#arguments, i]
+               | "$arguments" "[" expr:i "]"                                         -> [#arguments, i]
                | "$arguments_length"                                                 -> [#arguments_length]
                | "$arguments_slice" "(" expr:i ")"                                  -> [#arguments_slice, i]
                | "name":n                                                            -> [#get, n]

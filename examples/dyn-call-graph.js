@@ -58,7 +58,7 @@ function after_apply(fn)
     var flag = 0;
 
     function call() {
-        return apply.__$call__(this, $arguments[@0], $arguments_slice(1));
+        return apply.__$call__(this, $arguments[0], $arguments_slice(1));
     };
 
     function apply(obj, args) {
