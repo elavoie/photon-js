@@ -1020,7 +1020,7 @@ ometa PhotonJSCodeGen {
   try      :ctxt block:x :name ?(name === undefined) block:c block:f -> ("try\n" + x + " finally\n" + f ),
   try      :ctxt block:x :name block:c block:f                     -> ("try\n" + x + " catch (" + name + ")\n" + c + "finally\n" + f),
   switch   trans:x inc trans*:cases dec                            -> ("switch (" +  x +  ")\n" +  self.ilvl() +  "{\n" +  cases.join("\n") +  self.ilvl() +  "}"),
-  case     trans:x inc block:y dec                                 -> (self.ilvl() + "case " +  x +  ":\n" + y),
+  case     trans:x inc block:y dec                                 -> (self.ilvl() + "case " + x + ":\n" + y),
   default          inc block:y dec                                 -> (self.ilvl() + "default:\n" +  y),
 
   ref      :s                                                      -> s,
@@ -1034,8 +1034,7 @@ ometa PhotonJSCodeGen {
   igetp    trans:x trans:fd                                        -> (x + "[" + fd + "]")
 }
 
-PhotonJSCodeGen.initialize = function ()
-{
+PhotonJSCodeGen.initialize = function () {
     this.i     = 0;
     this.sp    = [""];
     this.stmts = {"if":true, "while":true, "for":true, "forIn":true, "try":true, "switch":true, "with":true};
