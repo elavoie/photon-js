@@ -97,8 +97,7 @@ function bind(msg, rcv) {
         rcv = rcv.prototype;
     }
 
-    var str = "Message '" + msg + "' not understood";
-    throw new Error(str);
+    return null;
 }
 
 function getProp(obj, name)
@@ -107,25 +106,9 @@ function getProp(obj, name)
 }
 
 function send(rcv, msg) {
-    if (typeof rcv === "string")
-    {
-        var m = rcv[msg];
-        if (m !== undefined && typeof m === "function")
-        {
-            var r = m.apply(rcv, Array.prototype.slice.call(arguments, 2));
-            assert(isPrimitive(r), "Non-primitive string return value");
-            return r;
-        }
-    }
-
     var method = bind(msg, rcv);
 
-    if (typeof method.payload.code !== "function")
-    {
-        error("Invalid method implementation");
-    }
-
-    var args = [rcv, method].concat(Array.prototype.slice.call(arguments, 2).map(function (x) {
+    var args = Array.prototype.slice.call(arguments, 2).map(function (x) {
         if (isPrimitive(x) || x.prototype !== undefined)
         {
             return x;
@@ -136,7 +119,19 @@ function send(rcv, msg) {
         {
             error("Invalid object type '" + typeof x + "' for object '" + x + "' in send '" + String(msg) + "'");
         }
-    }));
+    });
+
+    if (method === null)
+    {
+        return send.call(null, rcv, "__not_understood__", msg, arr(args));
+    }
+
+    if (typeof method.payload.code !== "function")
+    {
+        error("Invalid method implementation");
+    }
+
+    var args = [rcv, method].concat(args);
     
     //return method.payload.code.apply(null, args);
 
@@ -394,6 +389,10 @@ extend(root.object, obj(null, null, {
     "__new__":function () {
         return obj(this, null);
     },
+    "__not_understood__":bs_clos(function ($this, $closure, msg, args)
+    {
+        throw new Error("Object " + $this + " has no method '" + msg + "'");
+    }),
     "__set__":function (name, value) {
         var offset = send(this.map, "lookup", name);
         if (offset !== undefined)
@@ -417,7 +416,7 @@ extend(root.object, obj(null, null, {
     "hasOwnProperty":function (name)
     {
         return send(this.map, "lookup", name) !== undefined;
-    }
+    },
 }));
 
 extend(root.mapMap, objMap());
@@ -591,6 +590,42 @@ extend(root.primitive, obj(root.object, null, {
 
         error("TypeError: Invalid __get__ operation on primitive value '" + $this + "'");
     }),
+    "__not_understood__":bs_clos(function ($this, $closure, msg, args)
+    {
+        var rcv = $this;
+        if (typeof rcv === "string")
+        {
+            var m = rcv[msg];
+            if (m !== undefined && typeof m === "function")
+            {
+                var r = m.apply(rcv, args.payload.map(function (obj) {
+                    if (isPrimitive(obj))
+                        return obj;
+                    else if (send(obj, "__type__") === "regexp")
+                        return obj.payload.code;
+                    else
+                    {
+                        print(obj.payload.code);
+                        inspect(obj,1);
+                        error("Unsupported object " + obj + " for primitive string operation");
+                    }
+                }));
+
+                if (isPrimitive(r))
+                    return r;
+                else if (r instanceof Array) {
+                    return arr(r.map(function (obj) {
+                        assert(isPrimitive(obj), "Non-primitive string return value " + obj);
+                        return obj;
+                    }));
+                } else {
+                    error("Unsupported return value " + r + " for primitive string operation");
+                }
+            }
+        }
+
+        throw new Error("Object " + $this + " has no method '" + msg + "'");
+    }),
     "__set__":bs_clos(function ($this, $closure, name, value) {
         //if (isPrimitive(this))
         error("TypeError: Invalid __set__ operation on primitive value '" + $this + "'");
@@ -732,7 +767,9 @@ extend(root.regexp, obj(root.object, {code:RegExp.prototype}, {
         var r = $this.payload.code(s);
         return r === null ? r : arr(r);
     }),
-    
+    "__type__":function () {
+        return "regexp";
+    }
 }));
 
 try
