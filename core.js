@@ -12,10 +12,12 @@ var root = {
     array:{},
     cell:{},
     function:{},
+    global:{},
     map:{},
     mapMap:{},
     object:{},
     primitive:{},
+    regexp:{},
     reservedProperty:{}
 };
 
@@ -105,6 +107,17 @@ function getProp(obj, name)
 }
 
 function send(rcv, msg) {
+    if (typeof rcv === "string")
+    {
+        var m = rcv[msg];
+        if (m !== undefined && typeof m === "function")
+        {
+            var r = m.apply(rcv, Array.prototype.slice.call(arguments, 2));
+            assert(isPrimitive(r), "Non-primitive string return value");
+            return r;
+        }
+    }
+
     var method = bind(msg, rcv);
 
     if (typeof method.payload.code !== "function")
@@ -245,6 +258,11 @@ function clos(f)
     var g = send(root.function, "__new__");
     g.payload.code = f;
     return g;
+}
+
+function regexp(e)
+{
+    return obj(root.regexp, {code:new RegExp(e)});
 }
 
 function extend(obj, props)
@@ -567,6 +585,12 @@ extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
 }));
 
 extend(root.primitive, obj(root.object, null, { 
+    "__get__":bs_clos(function ($this, $closure, name) {
+        if (typeof $this === "string" && name === "length")
+            return $this.length;
+
+        error("TypeError: Invalid __get__ operation on primitive value '" + $this + "'");
+    }),
     "__set__":bs_clos(function ($this, $closure, name, value) {
         //if (isPrimitive(this))
         error("TypeError: Invalid __set__ operation on primitive value '" + $this + "'");
@@ -703,20 +727,18 @@ extend(root.cell, obj(root.object, undefined, {
     },
 }));
 
+extend(root.regexp, obj(root.object, {code:RegExp.prototype}, {
+    "call":bs_clos(function ($this, $closure, obj, s) {
+        var r = $this.payload.code(s);
+        return r === null ? r : arr(r);
+    }),
+    
+}));
+
 try
 {
     //print("Creating global object");
     root.global = send(root.object, "__new__");
-
-    //print("Initializing global object");
-    send(root.global, "__set__", "print", bs_clos(function ($this, $closure, s) { 
-        print(send(s, "__str__")); 
-    }));
-
-    send(root.global, "__set__", "error", bs_clos(function ($this, $closure, s)
-    {
-        throw new Error(s);
-    }));
 
     //print("Adding an inspection function");
     var inspect_fn = bs_clos(function ($this, $closure, s, max) { 
@@ -860,6 +882,9 @@ try
                 case "object":
 
                     break;
+                case "date":
+                    out(obj.payload);
+                    break;
                 default:
                     error("Invalid photon object type");
             }
@@ -873,23 +898,84 @@ try
 
         print(strOutput.join("\n"));
     });
-    send(root.global, "__set__", "inspect", inspect_fn);
 
     function inspect(obj, lvl)
     {
         return inspect_fn.payload.code(null, inspect_fn, obj, lvl);
     }
 
-    //print("Exposing root objects on the global object");
+
+
+    //print("Initializing global object");
     var env = send(root.object, "__new__");
-    send(root.global, "__set__", "root", env); 
-    send(env, "__set__", "array",    root.array);
-    send(env, "__set__", "cell",     root.cell);
-    send(env, "__set__", "object",   root.object);
-    send(env, "__set__", "map",      root.map);
-    send(env, "__set__", "mapMap",   root.mapMap);
-    send(env, "__set__", "function", root.function);
-    send(env, "__set__", "global",   root.global);
+
+    // Creating standard library
+    var Array_ctor = bs_clos(function ($this, $closure) {
+        return arr(Array.apply([], Array.prototype.slice.call(arguments,2)));
+    });
+    send(Array_ctor, "__set__", "prototype", root.array);
+
+    var Date_ctor = bs_clos(function ($this, $closure) {
+        if ($this === root.global)
+        {
+            $this = send(Date_ctor, "__get__", "prototype");
+        }
+        return obj($this, new Date());
+    });
+    send(Date_ctor, "__set__", "prototype", obj(root.object, Date.prototype, {
+        "__type__":function () { return "date"; }    
+    }));
+
+    extend(root.global, obj(root.object, null, { 
+        "__get__":bs_clos(function ($this, $closure, name) {
+            if (name === "__map__")
+                return $this.map;
+
+            var offset;
+            var obj = $this;
+
+            while (obj !== null)
+            {
+                offset = send(obj.map, "lookup", name);
+
+                if (offset !== undefined)
+                    return obj.values[offset];
+                else
+                    obj = obj.prototype;
+
+            }
+            
+            throw new Error("ReferenceError: " + name + " is not defined");
+        }),
+        "inspect":inspect_fn,
+        "print":bs_clos(function ($this, $closure, s) { 
+            print(send(s, "__str__")); 
+        }),
+        "error":bs_clos(function ($this, $closure, s) {
+            throw new Error(s);
+        }),
+        "run":bs_clos(function ($this, $closure, s) {
+            return run(s);
+        }),
+        "gc":bs_clos(function ($this, $closure, s) {
+            gc();
+        }),
+        "root":env,
+        "Array":Array_ctor,
+        "Date":Date_ctor
+    }));
+
+    extend(env, obj(root.object, null, {
+        "array":root.array,
+        "cell":root.cell,
+        "object":root.object,
+        "map":root.map,
+        "mapMap":root.mapMap,
+        "function":root.function,
+        "global":root.global
+    }));
+
+
 } catch (e)
 {
     if (e.stack)

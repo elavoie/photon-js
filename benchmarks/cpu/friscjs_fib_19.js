@@ -1701,19 +1701,6 @@ var FRISC = function() {
   return {MEM : MEM, CPU : CPU, IO : IO};
 };
 
-if (typeof module !== 'undefined' && typeof module.exports !== 'undefined') {
-  module.exports.FRISC = FRISC;
-  module.exports.util = {
-    convertIntToBinary: convertIntToBinary, 
-    convertBinaryToInt: convertBinaryToInt,
-    getBitString: getBitString,
-    extend: extend,
-    twosComplement: twosComplement,
-    generateStringOfCharacters: generateStringOfCharacters
-  };
-} else if (typeof document !== 'undefined' && typeof document.window !== 'undefined') {
-  document.window.FRISC = FRISC;
-}
 /*
     FRISC code
 

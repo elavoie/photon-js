@@ -1,5 +1,6 @@
 photon.compile = function (s, verbose)
 {
+    if (verbose) print("Parsing");
     var ast = PhotonParser.matchAll(s, "topLevel");
     if (verbose) print("MacroExp");
     ast = PhotonMacroExp.match(ast, "trans");
@@ -16,6 +17,8 @@ photon.compile = function (s, verbose)
     //print(code);
     return code;
 }
+
+var compile = photon.compile;
 
 photon.execute = function (f)
 {
@@ -46,6 +49,8 @@ for (var i = 0; i < arguments.length; ++i)
 {
     if (arguments[i] === "-v")
         var verbose = true;
+    else if (arguments[i] === "-f")
+        undefined;
     else
         files.push(arguments[i]);
 }
@@ -58,6 +63,7 @@ for (var i = 0; i < files.length; ++i)
         src += photon.compile(readFile(files[i]), verbose) + "\n"; 
     } catch(e)
     {
+        print("Error while compiling " + files[i]);
         if (e.stack !== undefined)
         {
             print(e.stack);
@@ -66,5 +72,7 @@ for (var i = 0; i < files.length; ++i)
     }
 }
 
-writeFile("temp.js", src);
+if (verbose)
+    writeFile("temp.js", src);
+
 photon.execute(src);

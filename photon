@@ -4,4 +4,4 @@ d8 ../photon/source/deps/ometa-js/lib.js                     \
    core.js \
    ometa/compiler.js \
    lib.js \
-   photon.js $@
+   photon.js --expose_gc -- $@
