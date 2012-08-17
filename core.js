@@ -593,7 +593,7 @@ extend(root.primitive, obj(root.object, null, {
     "__not_understood__":bs_clos(function ($this, $closure, msg, args)
     {
         var rcv = $this;
-        if (typeof rcv === "string")
+        if (typeof rcv === "string" || typeof rcv === "number")
         {
             var m = rcv[msg];
             if (m !== undefined && typeof m === "function")
@@ -607,7 +607,7 @@ extend(root.primitive, obj(root.object, null, {
                     {
                         print(obj.payload.code);
                         inspect(obj,1);
-                        error("Unsupported object " + obj + " for primitive string operation");
+                        error("Unsupported object " + obj + " for primitive operation");
                     }
                 }));
 
@@ -615,14 +615,14 @@ extend(root.primitive, obj(root.object, null, {
                     return r;
                 else if (r instanceof Array) {
                     return arr(r.map(function (obj) {
-                        assert(isPrimitive(obj), "Non-primitive string return value " + obj);
+                        assert(isPrimitive(obj), "Non-primitive return value " + obj);
                         return obj;
                     }));
                 } else {
-                    error("Unsupported return value " + r + " for primitive string operation");
+                    error("Unsupported return value " + r + " for primitive operation");
                 }
             }
-        }
+        } 
 
         throw new Error("Object " + $this + " has no method '" + msg + "'");
     }),
