@@ -18,6 +18,7 @@ photon.compile = function (s, verbose)
     return code;
 }
 
+// To allow the run method to compile JS using Photon compiler
 var compile = photon.compile;
 
 photon.execute = function (f)

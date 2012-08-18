@@ -29,7 +29,9 @@ var root = {
     "__new__",
     "__set__",
     "__str__",
-    "__type__"
+    "__type__",
+    "__not_understood__",
+    "hasOwnProperty"
 ].forEach(function (p) { root.reservedProperty[p] = true; });
 
 function copy(obj)
@@ -628,7 +630,7 @@ extend(root.primitive, obj(root.object, null, {
     }),
     "__set__":bs_clos(function ($this, $closure, name, value) {
         //if (isPrimitive(this))
-        error("TypeError: Invalid __set__ operation on primitive value '" + $this + "'");
+        error("TypeError: Invalid __set__ operation on primitive value '" + $this + "' at property '" + name + "'");
         //else
         //    return send(send(root.object, "__get__", "__set__"), "call", this, name, value); 
     }),
@@ -769,6 +771,9 @@ extend(root.regexp, obj(root.object, {code:RegExp.prototype}, {
     }),
     "__type__":function () {
         return "regexp";
+    },
+    "__str__":function () {
+        return this.payload.code.toString();
     }
 }));
 
@@ -963,6 +968,12 @@ try
         "__type__":function () { return "date"; }    
     }));
 
+    var Math_obj = obj(root.object, null, {
+        "sqrt":function (x) {
+            return Math.sqrt(x);
+        }
+    });
+
     extend(root.global, obj(root.object, null, { 
         "__get__":bs_clos(function ($this, $closure, name) {
             if (name === "__map__")
@@ -999,7 +1010,9 @@ try
         }),
         "root":env,
         "Array":Array_ctor,
-        "Date":Date_ctor
+        "Date":Date_ctor,
+        "Math":Math_obj,
+        "NaN":NaN
     }));
 
     extend(env, obj(root.object, null, {

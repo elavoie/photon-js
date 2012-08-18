@@ -253,7 +253,6 @@ ometa PhotonParser <: Parser {
                | digit+:ws ('.' digit+ | empty -> []):fs                             -> [#number, parseFloat(ws.join('') + '.' +
                                                                                                              fs.join(''))]
                | intLit:n                                                            -> [#number, n],
-  regexp       = fromTo2('/', '/'):cs                                                -> [#regexp, new RegExp(cs)],
   escapeChar   = '\\' char:c                                                         -> unescape('\\' + c),
   str          = seq('"""')  (escapeChar | ~seq('"""') char)*:cs seq('"""')          -> [#string, cs.join('')]
                | '\'' (escapeChar | ~'\'' char)*:cs '\''                             -> [#string, cs.join('')]
@@ -267,7 +266,7 @@ ometa PhotonParser <: Parser {
                  | '/'   | ``%='' | '%'    | ``&&='' | ``&='' | ``&&''  | ``||='' 
                  | ``|=''| ``||''
                  | '.'   | '!'    | '|'    | '&'     | '^'    | '~'              ):s -> [s, s],
-  tok          = spaces (ceval | name | keyword | number | str | regexp | special),
+  tok          = spaces (ceval | name | keyword | number | str | special),
   toks         = token*:ts spaces end                                                -> ts,
   token :tt    = tok:t ?(t[0] === tt)                                                -> t[1],
   spacesNoNl   = (~'\n' space)*,
@@ -350,8 +349,8 @@ ometa PhotonParser <: Parser {
                | "$arguments_slice" "(" expr:i ")"                                   -> [#arguments_slice, i]
                | "name":n                                                            -> [#get, n]
                | "number":n                                                          -> [#number, n]
-               | "regexp":e                                                          -> [#regexp, e]
                | "string":s                                                          -> [#string, s]
+               | spaces fromTo2('/', '/'):re                                         -> [#regexp, new RegExp(re)]
                | "eval":s                                                            -> eval(s)
                | "function" funcRest
                | "new" expr:e ?(e[0] === #call)                                      -> [#new, e[1]].concat(e.slice(2))
