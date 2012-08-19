@@ -250,10 +250,14 @@ ometa PhotonParser <: Parser {
   intLit       = intLit:n intDigit:d                                                 -> (n * 10 + d)
                | intDigit,
   number       = ``0x'' hexLit:n                                                     -> [#number, n]
-               | digit+:ws ('.' digit+ | empty -> []):fs                             -> [#number, parseFloat(ws.join('') + '.' +
-                                                                                                             fs.join(''))]
+               | digit+:ws ('.' digit+ | empty -> []):fs 
+                 ( ('e' ('+' | '-' | empty -> ''):sign digit+:ds -> {['e', sign].concat(ds)})
+                   | {[]}):es                                                        -> [#number, parseFloat(ws.join('') + '.' +
+                                                                                                             fs.join('') + es.join(''))]
                | intLit:n                                                            -> [#number, n],
-  escapeChar   = '\\' char:c                                                         -> unescape('\\' + c),
+  escapeChar   = ( ``\\x'' char:c1 char:c2                 -> ('x'+c1+c2) 
+                 | ``\\u'' char:c1 char:c2 char:c3 char:c4 -> ('u'+c1+c2+c3+c4)
+                 |   '\\'  char ):c                                                  -> unescape('\\' + c),
   str          = seq('"""')  (escapeChar | ~seq('"""') char)*:cs seq('"""')          -> [#string, cs.join('')]
                | '\'' (escapeChar | ~'\'' char)*:cs '\''                             -> [#string, cs.join('')]
                | '"'  (escapeChar | ~'"'  char)*:cs '"'                              -> [#string, cs.join('')]
@@ -264,7 +268,7 @@ ometa PhotonParser <: Parser {
                  | ``='' | ``>='' | '>'    | ``<=''  | '<'    | ``++''  | ``+=''
                  | '+'   | ``--'' | ``-='' | '-'     | ``*='' | '*'     | ``/=''
                  | '/'   | ``%='' | '%'    | ``&&='' | ``&='' | ``&&''  | ``||='' 
-                 | ``|=''| ``||''
+                 | ``|=''| ``||'' | ``^=''
                  | '.'   | '!'    | '|'    | '&'     | '^'    | '~'              ):s -> [s, s],
   tok          = spaces (ceval | name | keyword | number | str | special),
   toks         = token*:ts spaces end                                                -> ts,
@@ -350,7 +354,7 @@ ometa PhotonParser <: Parser {
                | "name":n                                                            -> [#get, n]
                | "number":n                                                          -> [#number, n]
                | "string":s                                                          -> [#string, s]
-               | spaces fromTo2('/', '/'):re                                         -> [#regexp, new RegExp(re)]
+               | spaces fromTo2('/', '/'):re ('g' | 'i' | 'm' | 'y' | empty -> ''):c -> [#regexp, new RegExp(re, c)]
                | "eval":s                                                            -> eval(s)
                | "function" funcRest
                | "new" expr:e ?(e[0] === #call)                                      -> [#new, e[1]].concat(e.slice(2))
@@ -978,7 +982,7 @@ ometa PhotonJSCodeGen {
   blockBody  = [:t ?(t === "begin") apply("begin"):ans] -> ans
                | stmt:x                                 -> (self.ilvl() + x + "\n")
                | trans:x                                -> (self.ilvl() + x + ";\n"),
-  exprList   = [#begin ([#var :name trans:val] -> (name + " = " + val))*:es] -> ("var " + es.join(", "))
+  exprList   = [#begin ([#var :name trans:val] -> (name + " = " + val))*:es] -> ((es.length) > 0 ? ("var " + es.join(", ")) : "")
              | [#begin trans*:es]                                            -> es.join(", "),
   inc        = { self.i++; },
   dec        = { self.i--; },

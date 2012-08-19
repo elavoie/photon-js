@@ -605,11 +605,18 @@ extend(root.primitive, obj(root.object, null, {
                         return obj;
                     else if (send(obj, "__type__") === "regexp")
                         return obj.payload.code;
-                    else
-                    {
+                    else if (send(obj, "__type__") === "function") {
+                        return (function (f) {
+                           // Wrap implementation function to match native calling conventions
+                           return (function () {
+                               var args = Array.prototype.slice.call(arguments, 0);
+                               return f.payload.code.apply(null, [this, f].concat(args));
+                           });
+                        })(obj);
+                    } else {
                         print(obj.payload.code);
                         inspect(obj,1);
-                        error("Unsupported object " + obj + " for primitive operation");
+                        error("Unsupported object " + obj + " for primitive operation '" + msg + "'");
                     }
                 }));
 
@@ -691,6 +698,9 @@ extend(root.array, obj(root.object, [], {
     },
     "pop":function (value) {
         return this.payload.pop();
+    },
+    "slice":function (from, to) {
+        return arr(this.payload.slice(from, to));
     }
 }));
 
@@ -964,13 +974,33 @@ try
         }
         return obj($this, new Date());
     });
-    send(Date_ctor, "__set__", "prototype", obj(root.object, Date.prototype, {
-        "__type__":function () { return "date"; }    
+    var Date_proto = obj(root.object, Date.prototype, {
+        "__type__":function () { return "date"; },
+        "__str__":function ()  { return String(this.payload); },
+        "getTime":function ()  { return this.payload.getTime(); } 
+    });
+    send(Date_ctor, "__set__", "prototype", Date_proto);
+
+    var Object_ctor = bs_clos(function ($this, $closure) {
+        var proto = $this === root.global ? root.object : $this;
+        return obj(proto, null);
+    });
+    send(Object_ctor, "__set__", "prototype", root.object);
+
+    var String_ctor = bs_clos(function ($this, $closure, obj) {
+        assert($this === root.global, "Unsupported string object");
+        assert(isPrimitive(obj), "Unsupported conversion from non-primitive object");
+        return String(obj);
+    });
+    send(String_ctor, "__set__", "prototype", "");
+    send(String_ctor, "__set__", "fromCharCode", bs_clos(function ($this, $closure) {
+        return String.fromCharCode.apply(null, Array.prototype.slice.call(arguments, 2));    
     }));
 
     var Math_obj = obj(root.object, null, {
-        "sqrt":function (x) {
-            return Math.sqrt(x);
+        "PI":Math.PI,
+        "__not_understood__":function (msg, args) {
+            return Math[msg].apply(null, args.payload);
         }
     });
 
@@ -1009,8 +1039,10 @@ try
             gc();
         }),
         "root":env,
+        "Object":Object_ctor,
         "Array":Array_ctor,
         "Date":Date_ctor,
+        "String":String_ctor,
         "Math":Math_obj,
         "NaN":NaN
     }));
@@ -1035,4 +1067,3 @@ try
 
     throw e;
 }
-
