@@ -701,6 +701,9 @@ extend(root.array, obj(root.object, [], {
     },
     "slice":function (from, to) {
         return arr(this.payload.slice(from, to));
+    },
+    "join":function (sep) {
+        return arr(this.payload.join(sep));
     }
 }));
 
