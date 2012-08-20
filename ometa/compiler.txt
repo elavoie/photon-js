@@ -346,7 +346,7 @@ ometa PhotonParser <: Parser {
                | primExprHd,
   primExprHd   = "super" "(" expr:e ")"                                              -> [#super, e] 
                | "(" listOf(#expr, ','):es ")"                                       -> (es.length === 1 ? es[0] : [#begin].concat(es))
-               | "this"                                                              -> [#this]
+               | ( "this" | "self" )                                                 -> [#this]
                | "$closure"                                                          -> [#closure]
                | "$arguments" "[" expr:i "]"                                         -> [#arguments, i]
                | "$arguments_length"                                                 -> [#arguments_length]
@@ -502,17 +502,23 @@ ometa PhotonDesugar <: PhotonASTCopy {
   global   :ctxt 
            {self.context.enter_function_scope();}
            trans:r                                      
-           {self.context.leave_function_scope();}             -> {var e = gensym(); var try_ctxt = _new_context(); 
-                                                                  [#global, ctxt, 
-                                                                    [#try, _new_context(), 
-                                                                        [#begin].concat(r.slice(1)),
-                                                                        e,
-                                                                        [#begin, 
-                                                                            [#code, "print(" + e + ".stack)"],
-                                                                            [#call, [#get, "print"], [#string, "Unhandled exception:"]],
-                                                                            [#call, [#get, "print"], [#get, e]],
-                                                                            [#throw, [#get, e]]],
-                                                                        [#get, #undefined]]]},
+           {self.context.leave_function_scope();}             -> {var ast;
+                                                                  if (photon.genTryCatch) {
+                                                                      var e = gensym(); var try_ctxt = _new_context(); 
+                                                                      ast = [#global, ctxt, 
+                                                                        [#try, _new_context(), 
+                                                                            [#begin].concat(r.slice(1)),
+                                                                            e,
+                                                                            [#begin, 
+                                                                                [#code, "print(" + e + ".stack)"],
+                                                                                [#call, [#get, "print"], [#string, "Unhandled exception:"]],
+                                                                                [#call, [#get, "print"], [#get, e]],
+                                                                                [#throw, [#get, e]]],
+                                                                            [#get, #undefined]]]
+                                                                  } else {
+                                                                      ast = [#global, ctxt, [#begin].concat(r.slice(1))]; 
+                                                                  } 
+                                                                  ast},
   func     :args :ctxt 
            {self.context.enter_function_scope(); args = self.context.replace_arguments(args); self.context.args(args);} 
            trans:body

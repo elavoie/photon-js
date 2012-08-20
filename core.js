@@ -6,6 +6,8 @@
 // - serialize at a high-level such that the underlying representation of objects is abstracted
 // - print a textual representation of the object at a low-level for debugging the underlying representation
 // - print a textual representation of the object at a high-level for debugging the application behavior
+//
+//   * Properties on maps should have a flag to specify if they are enumerable
 
 var root = {
     arguments:{},
@@ -18,6 +20,10 @@ var root = {
     object:{},
     primitive:{},
     regexp:{},
+    boolean:null,
+    number:null,
+    string:null,
+    date:null,
     reservedProperty:{}
 };
 
@@ -30,6 +36,7 @@ var root = {
     "__set__",
     "__str__",
     "__type__",
+    "__typeof__",
     "__not_understood__",
     "hasOwnProperty"
 ].forEach(function (p) { root.reservedProperty[p] = true; });
@@ -336,7 +343,8 @@ extend(root.object, obj(null, null, {
     "__itr__":function () {
         var _obj     = this;
         var _visited = {};
-        var _itr     = send(_obj.map, "prop_itr");
+        var _itr = send(_obj.map, "prop_itr");
+
         return send(obj(root.object, null, {
             "get":function () {
                 return send(_itr, "get");
@@ -348,36 +356,30 @@ extend(root.object, obj(null, null, {
             "next":function () {
                 var r = null;
 
-                while (r === null && send(this, "valid"))
-                {
+                while (r === null && send(this, "valid")) {
                     // If the object had a property added or deleted during
-                    // iteration its map will have changed so let's continue 
+                    // iteration, its map will have changed so let's continue 
                     // with the new map instead
-                    if (_obj.map !== send(_itr, "__get__", "map"))
-                    {
+                    if (_obj.map !== send(_itr, "__get__", "map")) {
                         _itr = send(_obj.map, "prop_itr");
                     } 
                     
                     // If the object's map has been traversed, let's move to the prototype
-                    if (!send(_itr, "valid"))
-                    {
+                    if (!send(_itr, "valid")) {
                         _obj = _obj.prototype;
 
                         if (_obj !== null)
                             _itr = send(_obj.map, "prop_itr");
                     }
-
+                    
                     // Let's find a property in the current map that has not been visited
                     // yet
-                    while (r === null && send(_itr, "valid"))
-                    {
+                    while (r === null && send(_itr, "valid")) {
                         var p = send(_itr, "get");
-                        if (_visited[p] !== true && root.reservedProperty[p] !== true)
-                        {
+                        if (_visited[p] !== true && root.reservedProperty[p] !== true) {
                             _visited[p] = true;
                             r = p;
-                        } else
-                        {
+                        } else {
                             send(_itr, "next");
                         }
                     }
@@ -407,17 +409,17 @@ extend(root.object, obj(null, null, {
             return this.values[send(this.map, "lookup", name)] = value;
         }
     },
-    "__type__":function ()
-    {
+    "__type__":function () {
         return "object";
     },
-    "__str__":function ()
-    {
+    "__typeof__":function () {
+        return "object";
+    },
+    "__str__":function () {
         return "[object Object]";    
     },
-    "hasOwnProperty":function (name)
-    {
-        return send(this.map, "lookup", name) !== undefined;
+    "hasOwnProperty":function (name) {
+        return send(this.map, "lookup", name) !== undefined || (this.type === "array" && name >= 0 && name < this.payload.length);
     },
 }));
 
@@ -538,8 +540,7 @@ root.map.payload = root.map.map.payload;
 root.map.map = root.map;
 
 extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
-    "__ctor__":bs_clos(function ($this, $closure)
-    {
+    "__ctor__":bs_clos(function ($this, $closure) {
         var o = send(send($this, "__get__", "prototype"), "__new__"); 
         var r = $this.payload.code.apply(o, [o, $closure].concat(Array.prototype.slice.call(arguments, 2)));
 
@@ -548,8 +549,7 @@ extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
         else
             return r;
     }),
-    "__get__":function (name)
-    {
+    "__get__":function (name) {
         // Lazy creation of the prototype property
         if (name === "prototype" && !send(this, "hasOwnProperty", "prototype"))
         {
@@ -561,25 +561,23 @@ extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
         }
         
     },
-    "__new__":function ()
-    {
+    "__new__":function () {
         return obj(root.function, {code:null, cells:[]});
     },
-    "__str__":function ()
-    {
+    "__str__":function () {
         return String(this.payload.code);
     },
-    "__type__":function ()
-    {
+    "__type__":function () {
         return "function";
     },
-    "apply":function (rcv, args)
-    {
+    "__typeof__":function () {
+        return "function";
+    },
+    "apply":function (rcv, args) {
         assert((typeof this.payload.code) === "function" && (args.type === "array"));
         return this.payload.code.apply(null, [rcv, this].concat(args.payload));
     },
-    "call":function ()
-    {
+    "call":function () {
         assert(typeof this.payload.code === "function");
         return this.payload.code.apply(null, [arguments[0], this].concat(Array.prototype.slice.call(arguments, 1)));
     }
@@ -587,19 +585,31 @@ extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
 
 extend(root.primitive, obj(root.object, null, { 
     "__get__":bs_clos(function ($this, $closure, name) {
-        if (typeof $this === "string" && name === "length")
-            return $this.length;
+        if (typeof $this === "string")
+        {
+            if (name === "length")
+                return $this.length;
+            else if (typeof name === "number")
+                return $this[name];
+        }
+            
 
         error("TypeError: Invalid __get__ operation on primitive value '" + $this + "'");
     }),
     "__not_understood__":bs_clos(function ($this, $closure, msg, args)
     {
         var rcv = $this;
-        if (typeof rcv === "string" || typeof rcv === "number")
+        if (typeof rcv === "string" || typeof rcv === "number" || typeof rcv === "boolean")
         {
+            // Check the prototype object to see if a method was defined
+            var m = send(root[typeof rcv], "__get__", msg);
+            if (m !== undefined && send(m, "__type__") === "function") {
+                return m.payload.code.apply(null, [$this, m].concat(args.payload));
+            }
+
+            // Otherwise delegate to the underlying implementation
             var m = rcv[msg];
-            if (m !== undefined && typeof m === "function")
-            {
+            if (m !== undefined && typeof m === "function") {
                 var r = m.apply(rcv, args.payload.map(function (obj) {
                     if (isPrimitive(obj))
                         return obj;
@@ -614,8 +624,6 @@ extend(root.primitive, obj(root.object, null, {
                            });
                         })(obj);
                     } else {
-                        print(obj.payload.code);
-                        inspect(obj,1);
                         error("Unsupported object " + obj + " for primitive operation '" + msg + "'");
                     }
                 }));
@@ -632,22 +640,24 @@ extend(root.primitive, obj(root.object, null, {
                 }
             }
         } 
-
+      
         throw new Error("Object " + $this + " has no method '" + msg + "'");
     }),
     "__set__":bs_clos(function ($this, $closure, name, value) {
         //if (isPrimitive(this))
-        error("TypeError: Invalid __set__ operation on primitive value '" + $this + "' at property '" + name + "'");
+        error("TypeError: Invalid __set__ operation on primitive value '" + $this + "' for property '" + name + "'");
         //else
         //    return send(send(root.object, "__get__", "__set__"), "call", this, name, value); 
     }),
     "__str__":bs_clos(function ($this) {
         return String($this);
     }),
-    "__type__":function ()
-    {
+    "__type__":function () {
         return "primitive";
-    }
+    },
+    "__typeof__":bs_clos(function ($this) {
+        return typeof $this; 
+    })
 })); 
 
 extend(root.array, obj(root.object, [], {
@@ -658,9 +668,9 @@ extend(root.array, obj(root.object, [], {
         unimplemented("__delete__");
     },
     "__get__":function (name) {
-        if (typeof name === "number" && name >= 0)
+        if (name >= 0 && (typeof name === "number" || name < this.payload.length))
         {
-            return this.payload[name];                
+            return this.payload[name];
         } else if (name === "length")
         {
             return this.payload.length;
@@ -669,13 +679,70 @@ extend(root.array, obj(root.object, [], {
             return send(send(root.object, "__get__", "__get__"), "call", this, name); 
         }
     },
+    "__itr__":function () {
+        var props = [];
+        var length = this.payload.length;
+        for (var i in this.payload) {
+            if (i >= 0 && i < length)
+                props.push(i);
+        }
+
+        var _obj = this;
+        var _itr = null
+        var _idx = -1;
+        var _idx_props = props;
+        var last = _idx_props.length - 1;
+        var array_reserved = {
+            "concat":true,
+            "push":true,
+            "pop":true,
+            "slice":true,
+            "join":true,
+            "sort":true
+        };
+
+        return send(obj(root.object, null, {
+            "init":function () {
+                send(this, "next");
+                return this;    
+            },
+            "get":function () {
+                if (_idx <= last)
+                    return props[_idx];
+                else
+                    return send(_itr, "get");
+
+            },
+            "valid":function () {
+                return _idx <= last || send(_itr, "valid");
+            },
+            "next":function () {
+                if (_idx < last) {
+                    _idx++;
+                    return; 
+                } else if (_idx === last) {
+                    _idx++;
+                    _itr = send(send(root.object, "__get__", "__itr__"), "call", _obj);
+                } else {
+                    send(_itr, "next");
+                }
+
+                // TODO: Properties on maps should have a flag to specify if they are enumerable instead
+                var p = send(_itr, "get");
+                while (array_reserved[p]) {
+                    send(_itr, "next");
+                    var p = send(_itr, "get");
+                }
+            }
+        }), "init");
+    },
     "__new__":function () {
         var a = obj(this, []);
         a.type = "array";
         return a;
     },
     "__set__":function (name, value) {
-        if (typeof name === "number" && name >= 0)
+        if (name >= 0 && (typeof name === "number" || name < this.payload.length))
         {
             return this.payload[name] = value;                
         } else
@@ -704,6 +771,16 @@ extend(root.array, obj(root.object, [], {
     },
     "join":function (sep) {
         return arr(this.payload.join(sep));
+    },
+    "sort":function (f) {
+        if (f !== undefined) {
+            var g = function (a, b) {
+                return f.payload.code.call(this, this, f, a, b);         
+            };
+        } else {
+            var g = f;
+        }
+        this.payload.sort(g);
     }
 }));
 
@@ -782,8 +859,15 @@ extend(root.regexp, obj(root.object, {code:RegExp.prototype}, {
         var r = $this.payload.code(s);
         return r === null ? r : arr(r);
     }),
+    "test":function (s) {
+        assert(typeof s === "string", "Invalid argument type for test method");
+        return this.payload.code.test(s);
+    },
     "__type__":function () {
         return "regexp";
+    },
+    "__typeof__":function () {
+        return "function";
     },
     "__str__":function () {
         return this.payload.code.toString();
@@ -977,12 +1061,12 @@ try
         }
         return obj($this, new Date());
     });
-    var Date_proto = obj(root.object, Date.prototype, {
+    root.date = obj(root.object, Date.prototype, {
         "__type__":function () { return "date"; },
         "__str__":function ()  { return String(this.payload); },
         "getTime":function ()  { return this.payload.getTime(); } 
     });
-    send(Date_ctor, "__set__", "prototype", Date_proto);
+    send(Date_ctor, "__set__", "prototype", root.date);
 
     var Object_ctor = bs_clos(function ($this, $closure) {
         var proto = $this === root.global ? root.object : $this;
@@ -995,7 +1079,10 @@ try
         assert(isPrimitive(obj), "Unsupported conversion from non-primitive object");
         return String(obj);
     });
-    send(String_ctor, "__set__", "prototype", "");
+    root.string = obj(root.object, "", {
+
+    });
+    send(String_ctor, "__set__", "prototype", root.string);
     send(String_ctor, "__set__", "fromCharCode", bs_clos(function ($this, $closure) {
         return String.fromCharCode.apply(null, Array.prototype.slice.call(arguments, 2));    
     }));
@@ -1006,6 +1093,24 @@ try
             return Math[msg].apply(null, args.payload);
         }
     });
+
+    var Boolean_ctor = bs_clos(function ($this, $closure, obj) {
+        assert($this === root.global, "Unsupported boolean object");
+        assert(isPrimitive(obj), "Unsupported conversion from non-primitive object");
+        return Boolean(obj);
+    });
+    root.boolean = obj(root.object, Boolean.prototype, {
+    });
+    send(Boolean_ctor, "__set__", "prototype", root.boolean);
+
+    var Number_ctor = bs_clos(function ($this, $closure, obj) {
+        assert($this === root.global, "Unsupported number object");
+        assert(isPrimitive(obj), "Unsupported conversion from non-primitive object");
+        return Number(obj);
+    });
+    root.number = obj(root.object, Number.prototype, {
+    });
+    send(Number_ctor, "__set__", "prototype", root.number);
 
     extend(root.global, obj(root.object, null, { 
         "__get__":bs_clos(function ($this, $closure, name) {
@@ -1028,6 +1133,10 @@ try
             
             throw new Error("ReferenceError: " + name + " is not defined");
         }),
+        "__not_understood__":bs_clos(function ($this, $closure, msg, args)
+        {
+            throw new Error("ReferenceError: " + msg + " is not defined");
+        }),
         "inspect":inspect_fn,
         "print":bs_clos(function ($this, $closure, s) { 
             print(send(s, "__str__")); 
@@ -1041,11 +1150,21 @@ try
         "gc":bs_clos(function ($this, $closure, s) {
             gc();
         }),
+        "eval":function (s) {
+            var ss = compile(s);
+            var r = eval(ss);
+            return r;
+        },
+        "load":function (s) {
+            eval(compile(readFile(s)));
+        },
         "root":env,
         "Object":Object_ctor,
         "Array":Array_ctor,
         "Date":Date_ctor,
         "String":String_ctor,
+        "Boolean":Boolean_ctor,
+        "Number":Number_ctor,
         "Math":Math_obj,
         "NaN":NaN
     }));

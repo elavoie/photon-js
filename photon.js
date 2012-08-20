@@ -1,5 +1,15 @@
-photon.compile = function (s, verbose)
+var photon = {};
+
+photon.genTryCatch = false;
+
+photon.compile = function (s, verbose, genTryCatch)
 {
+    if (genTryCatch === undefined)
+        genTryCatch = false;
+
+    if (genTryCatch !== photon.genTryCatch)
+        var oldGenTryCatch = photon.genTryCatch;
+
     if (verbose) print("Parsing");
     var ast = PhotonParser.matchAll(s, "topLevel");
     if (verbose) print("MacroExp");
@@ -15,6 +25,10 @@ photon.compile = function (s, verbose)
     if (verbose) print("JSCodeGen");
     var code = PhotonJSCodeGen.match(ast, "trans");
     //print(code);
+
+    if (oldGenTryCatch !== photon.genTryCatch)
+        photon.genTryCatch = oldGenTryCatch;
+
     return code;
 }
 
@@ -61,7 +75,7 @@ for (var i = 0; i < files.length; ++i)
     try
     {
         src += "// " + files[i] + "\n";
-        src += photon.compile(readFile(files[i]), verbose) + "\n"; 
+        src += photon.compile(readFile(files[i]), verbose, true) + "\n"; 
     } catch(e)
     {
         print("Error while compiling " + files[i]);
