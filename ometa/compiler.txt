@@ -241,7 +241,7 @@ ometa PhotonParser <: Parser {
   nameRest     = nameFirst | digit,
   iName        = firstAndRest(#nameFirst, #nameRest):r                               -> r.join(''),
   isKeyword :x = ?self._isKeyword(x),
-  name         = iName:n ~isKeyword(n)                                               -> [#name, n === 'self' ? '$elf' : n],
+  name         = iName:n ~isKeyword(n)                                               -> [#name, n],
   keyword      = iName:k isKeyword(k)                                                -> [k, k],
   hexDigit     = char:x {this.hexDigits.indexOf(x.toLowerCase())}:v ?(v >= 0)        -> v,
   hexLit       = hexLit:n hexDigit:d                                                 -> (n * 16 + d)
@@ -257,7 +257,9 @@ ometa PhotonParser <: Parser {
                | intLit:n                                                            -> [#number, n],
   escapeChar   = ( ``\\x'' char:c1 char:c2                 -> ('x'+c1+c2) 
                  | ``\\u'' char:c1 char:c2 char:c3 char:c4 -> ('u'+c1+c2+c3+c4)
-                 |   '\\'  char ):c                                                  -> unescape('\\' + c),
+                 | ``\\\n''                                -> ''                                     
+                 |   '\\'  char):c                                                   -> unescape('\\' + c),
+
   str          = seq('"""')  (escapeChar | ~seq('"""') char)*:cs seq('"""')          -> [#string, cs.join('')]
                | '\'' (escapeChar | ~'\'' char)*:cs '\''                             -> [#string, cs.join('')]
                | '"'  (escapeChar | ~'"'  char)*:cs '"'                              -> [#string, cs.join('')]
@@ -346,7 +348,7 @@ ometa PhotonParser <: Parser {
                | primExprHd,
   primExprHd   = "super" "(" expr:e ")"                                              -> [#super, e] 
                | "(" listOf(#expr, ','):es ")"                                       -> (es.length === 1 ? es[0] : [#begin].concat(es))
-               | ( "this" | "self" )                                                 -> [#this]
+               | "this"                                                              -> [#this]
                | "$closure"                                                          -> [#closure]
                | "$arguments" "[" expr:i "]"                                         -> [#arguments, i]
                | "$arguments_length"                                                 -> [#arguments_length]
