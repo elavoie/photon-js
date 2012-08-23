@@ -209,6 +209,9 @@ function arr(payload)
 {
     var a = obj(root.array, payload);
     a.type = "array";
+    a.toString = function () {
+        return send(this, "__str__");
+    }
     return a;
 }
 
@@ -737,9 +740,7 @@ extend(root.array, obj(root.object, [], {
         }), "init");
     },
     "__new__":function () {
-        var a = obj(this, []);
-        a.type = "array";
-        return a;
+        return arr([]);
     },
     "__set__":function (name, value) {
         if (name >= 0 && (typeof name === "number" || name < this.payload.length))
