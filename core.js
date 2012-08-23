@@ -854,6 +854,14 @@ extend(root.cell, obj(root.object, undefined, {
 }));
 
 extend(root.regexp, obj(root.object, {code:RegExp.prototype}, {
+    "__get__":function (name) {
+        if (name === "source") {
+            return this.payload.code.source;
+        } else
+        {
+            return send(send(root.object, "__get__", "__get__"), "call", this, name); 
+        }
+    },
     "call":bs_clos(function ($this, $closure, obj, s) {
         var r = $this.payload.code(s);
         return r === null ? r : arr(r);
