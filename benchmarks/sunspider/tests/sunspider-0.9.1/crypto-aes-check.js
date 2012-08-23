@@ -73,6 +73,5 @@ var password = "O Romeo, Romeo! wherefore art thou Romeo?";
 
 var cipherText = AESEncryptCtr(plainText, password, 256);
 var decryptedText = AESDecryptCtr(cipherText, password, 256);
-print(cipherText);
 print(decryptedText);
 print(plainText === decryptedText);
