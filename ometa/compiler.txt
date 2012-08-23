@@ -1012,7 +1012,7 @@ ometa PhotonJSCodeGen {
   set      [#closureRef trans:fn trans:offset] trans:rhs           -> ("(" + fn + ".payload.cells[" + offset + "] = " + rhs + ")"),
   closureRefValue trans:fn trans:offset                            -> ("(" + fn + ".payload.cells[" + offset + "].payload)"),
   set      [#closureRefValue trans:fn trans:offset] trans:rhs      -> ("(" + fn + ".payload.cells[" + offset + "].payload = " + rhs + ")"),
-  set      trans:lhs trans:rhs                                     -> (lhs +  " = " +  rhs),
+  set      trans:lhs trans:rhs                                     -> ("(" + lhs +  " = " +  rhs + ")"),
   binop    :op trans:x trans:y                                     -> ("(" + x +  " " +  op +  " " +  y + ")"),
   return   trans:x                                                 -> ("return " +  x),
   with     trans:x block:s                                         -> ("with (" +  x +  ")\n" +  s),
