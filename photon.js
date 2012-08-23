@@ -7,8 +7,8 @@ photon.compile = function (s, verbose, genTryCatch)
     if (genTryCatch === undefined)
         genTryCatch = false;
 
-    if (genTryCatch !== photon.genTryCatch)
-        var oldGenTryCatch = photon.genTryCatch;
+    var oldGenTryCatch = photon.genTryCatch;
+    photon.genTryCatch = genTryCatch;
 
     if (verbose) print("Parsing");
     var ast = PhotonParser.matchAll(s, "topLevel");
@@ -26,8 +26,7 @@ photon.compile = function (s, verbose, genTryCatch)
     var code = PhotonJSCodeGen.match(ast, "trans");
     //print(code);
 
-    if (oldGenTryCatch !== photon.genTryCatch)
-        photon.genTryCatch = oldGenTryCatch;
+    photon.genTryCatch = oldGenTryCatch;
 
     return code;
 }
