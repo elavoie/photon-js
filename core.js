@@ -1091,6 +1091,9 @@ try
         "PI":Math.PI,
         "__not_understood__":function (msg, args) {
             return Math[msg].apply(null, args.payload);
+        },
+        "sin":function (x) {
+            return Math.sin(x);
         }
     });
 
