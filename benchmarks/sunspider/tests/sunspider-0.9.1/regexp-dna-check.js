@@ -1711,5 +1711,7 @@ for(k in subs)
  dnaInput = dnaInput.replace(k, subs[k]) // FIXME: Would like this to be a global substitution in a future version of SunSpider.
  // search string, replacement string, flags
 
+print("dnaInput:");
 print(dnaInput);
+print("dnaOutputString:");
 print(dnaOutputString);
