@@ -356,7 +356,9 @@ ometa PhotonParser <: Parser {
                | "name":n                                                            -> [#get, n]
                | "number":n                                                          -> [#number, n]
                | "string":s                                                          -> [#string, s]
-               | spaces fromTo2('/', '/'):re ('g' | 'i' | 'm' | 'y' | empty -> ''):c -> [#regexp, new RegExp(re, c)]
+               | spaces fromTo2('/', '/'):re 
+                 ('g' | 'i' | 'm' | 'y' | empty -> ''):c1 
+                 ('g' | 'i' | 'm' | 'y' | empty -> ''):c2                            -> [#regexp, new RegExp(re, c1+c2)]
                | "eval":s                                                            -> eval(s)
                | "function" funcRest
                | "new" expr:e ?(e[0] === #call)                                      -> [#new, e[1]].concat(e.slice(2))
@@ -504,12 +506,12 @@ ometa PhotonDesugar <: PhotonASTCopy {
   global   :ctxt 
            {self.context.enter_function_scope();}
            trans:r                                      
-           {self.context.leave_function_scope();}             -> {var ast;
+           {self.context.leave_global_scope();}:vs          -> {var ast;
                                                                   if (photon.genTryCatch) {
                                                                       var e = gensym(); var try_ctxt = _new_context(); 
                                                                       ast = [#global, ctxt, 
                                                                         [#try, _new_context(), 
-                                                                            [#begin].concat(r.slice(1)),
+                                                                            [#begin].concat([vs]).concat(r.slice(1)),
                                                                             e,
                                                                             [#begin, 
                                                                                 [#code, "print(" + e + ".stack)"],
@@ -518,7 +520,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                                 [#throw, [#get, e]]],
                                                                             [#get, #undefined]]]
                                                                   } else {
-                                                                      ast = [#global, ctxt, [#begin].concat(r.slice(1))]; 
+                                                                      ast = [#global, ctxt, [#begin].concat([vs]).concat(r.slice(1))]; 
                                                                   } 
                                                                   ast},
   func     :args :ctxt 
@@ -679,6 +681,16 @@ PhotonDesugar.context = {
     enter_function_scope:function () {
         this.previous_scopes.push(this.scope);    
         this.scope = {};
+    },
+    leave_global_scope:function () {
+        var vs = [];
+        for (id in this.scope) {
+            if (this.scope[id] === false) {
+                vs.push(["set", ["get", id], ["get", "undefined"]]);
+            }
+        }
+        this.scope = this.previous_scopes.pop();
+        return [#begin].concat(vs);
     },
     leave_function_scope:function () {
         var vs = [];
