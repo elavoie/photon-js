@@ -643,7 +643,7 @@ extend(root.primitive, obj(root.object, null, {
                 }
             }
         } 
-      
+     
         throw new Error("Object " + $this + " has no method '" + msg + "'");
     }),
     "__set__":bs_clos(function ($this, $closure, name, value) {
@@ -743,11 +743,9 @@ extend(root.array, obj(root.object, [], {
         return arr([]);
     },
     "__set__":function (name, value) {
-        if (name >= 0 && (typeof name === "number" || name < this.payload.length))
-        {
+        if (name >= 0 && (typeof name === "number" || name < this.payload.length)) {
             return this.payload[name] = value;                
-        } else
-        {
+        } else {
             return send(send(root.object, "__get__", "__set__"), "call", this, name, value); 
         }
     },
@@ -771,7 +769,7 @@ extend(root.array, obj(root.object, [], {
         return arr(this.payload.slice(from, to));
     },
     "join":function (sep) {
-        return arr(this.payload.join(sep));
+        return this.payload.join(sep);
     },
     "sort":function (f) {
         if (f !== undefined) {
