@@ -36,6 +36,7 @@ function cordicsincos() {
     TargetAngle = FIXED(28.027);
     CurrAngle = 0;
     for (Step = 0; Step < 12; Step++) {
+        print("Step: " + Step);
         var NewX;
         if (TargetAngle > CurrAngle) {
             NewX = X - (Y >> Step);
@@ -48,7 +49,7 @@ function cordicsincos() {
             X = NewX;
             CurrAngle -= Angles[Step];
         }
-        print(CurrAngle);
+        print("NewX:" + NewX + " Y:" + Y + " X:" + X + " CurrAngle:" + CurrAngle);
     }
 }
 
@@ -61,4 +62,4 @@ var Angles = [
   FIXED(0.027977)
               ];
 
-cordic(25000);
+cordic(1);
