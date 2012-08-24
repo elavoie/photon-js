@@ -1018,7 +1018,7 @@ ometa PhotonJSCodeGen {
   unop     :op trans:x                                             -> ("(" + op + " " +  x + ")"),
   get      "arguments"                                             -> ("$arguments"),
   get      :x                                                      -> x,
-  getCell  :x                                                      -> (x + ".payload"),
+  getCell  :x                                                      -> ("(" + x + ".payload)"),
   closure                                                          -> "$closure",
   closureRef trans:fn trans:offset                                 -> ("(" + fn + ".payload.cells[" + offset + "])"),
   set      [#closureRef trans:fn trans:offset] trans:rhs           -> ("(" + fn + ".payload.cells[" + offset + "] = " + rhs + ")"),
@@ -1029,7 +1029,7 @@ ometa PhotonJSCodeGen {
   return   trans:x                                                 -> ("return " +  x),
   with     trans:x block:s                                         -> ("with (" +  x +  ")\n" +  s),
   if       trans:cond block:t block:e                              -> ("if (" +  cond +  ")\n" + t + " else\n" + e),
-  condExpr trans:cond trans:t trans:e                              -> ("(" +  cond +  ") ? " +  t +  " : " +  e),
+  condExpr trans:cond trans:t trans:e                              -> ("((" +  cond +  ") ? " +  t +  " : " +  e + ")"),
   while    trans:cond block:body                                   -> ("while (" +  cond +  ")\n" +  body),
   doWhile  block:body trans:cond                                   -> ("do \n" +  body +  "while (" +  cond +  ")"),
   for      exprList:init trans:cond exprList:upd block:body        -> ("for (" +  init +  "; " +  cond +  "; " +  upd +  ")\n" +  body),
@@ -1053,12 +1053,12 @@ ometa PhotonJSCodeGen {
   ref      :s                                                      -> s,
   code     :c                                                      -> c,
   letLambda :args [trans*:values] block:body                       -> ("(function (" + args.join(",") + ")\n" + body + ")(" + values.join(",") + ")"),
-  postcode trans:x :s                                              -> (x + s),
-  precode  :s trans:x                                              -> (s + x),
-  arguments_length                                                 -> ("arguments.length - 2"),
-  arguments trans:i                                                -> ("arguments[" + i + "+2]"),
+  postcode trans:x :s                                              -> ("(" + x + s + ")"),
+  precode  :s trans:x                                              -> ("(" + s + x + ")"),
+  arguments_length                                                 -> ("(arguments.length - 2)"),
+  arguments trans:i                                                -> ("(arguments[" + i + "+2])"),
   arguments_slice trans:i                                          -> ("arr(Array.prototype.slice.call(arguments, " + i + "+2))"),
-  igetp    trans:x trans:fd                                        -> (x + "[" + fd + "]")
+  igetp    trans:x trans:fd                                        -> ("(" + x + "[" + fd + "])")
 }
 
 PhotonJSCodeGen.initialize = function () {

@@ -26,6 +26,7 @@ var root = {
     date:null,
     reservedProperty:{}
 };
+var global = this;
 
 [
     "__clone__", 
@@ -599,8 +600,10 @@ extend(root.primitive, obj(root.object, null, {
 
         error("TypeError: Invalid __get__ operation on primitive value '" + $this + "'");
     }),
-    "__not_understood__":bs_clos(function ($this, $closure, msg, args)
-    {
+    "toString":bs_clos(function ($this, $closure, x) {
+        return $this.toString(x);
+    }),
+    "__not_understood__":bs_clos(function ($this, $closure, msg, args) {
         var rcv = $this;
         if (typeof rcv === "string" || typeof rcv === "number" || typeof rcv === "boolean")
         {
@@ -1082,7 +1085,7 @@ try
     send(Object_ctor, "__set__", "prototype", root.object);
 
     var String_ctor = bs_clos(function ($this, $closure, obj) {
-        assert($this === root.global, "Unsupported string object");
+        assert($this === root.global || $this === global, "Unsupported string object");
         assert(isPrimitive(obj), "Unsupported conversion from non-primitive object");
         return String(obj);
     });
@@ -1121,6 +1124,14 @@ try
     root.number = obj(root.object, Number.prototype, {
     });
     send(Number_ctor, "__set__", "prototype", root.number);
+
+    var RegExp_ctor = bs_clos(function ($this, $closure, obj, mod) {
+        // Commented to allow string-unpack-code to run unmodified
+        //assert($this === root.global || $this === global, "Unsupported RegExp object");
+        assert(isPrimitive(obj), "Unsupported conversion from non-primitive object");
+        return regexp(RegExp(obj, mod));
+    });
+    send(RegExp_ctor, "__set__", "prototype", root.regexp);
 
     extend(root.global, obj(root.object, null, { 
         "__get__":bs_clos(function ($this, $closure, name) {
@@ -1168,6 +1179,12 @@ try
         "load":function (s) {
             eval(compile(readFile(s)));
         },
+        "parseInt":function (s) {
+            return parseInt(s);
+        },
+        "parseFloat":function (s) {
+            return parseFloat(s);
+        },
         "root":env,
         "Object":Object_ctor,
         "Array":Array_ctor,
@@ -1175,6 +1192,7 @@ try
         "String":String_ctor,
         "Boolean":Boolean_ctor,
         "Number":Number_ctor,
+        "RegExp":RegExp_ctor,
         "Math":Math_obj,
         "NaN":NaN
     }));
