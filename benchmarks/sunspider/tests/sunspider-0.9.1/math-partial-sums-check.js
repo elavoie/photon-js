@@ -25,15 +25,19 @@ function partial(n){
         a8 += alt/k;
         a9 += alt/(2*k -1);
     }
-    print(a1);
-    print(a2);
-    print(a3);
-    print(a4);
-    print(a5);
-    print(a6);
-    print(a7);
-    print(a8);
-    print(a9);
+
+    function ppfloat(x) {
+        print(x.toFixed(11));
+    }
+    ppfloat(a1);
+    ppfloat(a2);
+    ppfloat(a3);
+    ppfloat(a4);
+    ppfloat(a5);
+    ppfloat(a6);
+    ppfloat(a7);
+    ppfloat(a8);
+    ppfloat(a9);
 }
 
 for (var i = 1024; i <= 16384; i *= 2) {
