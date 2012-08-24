@@ -346,6 +346,9 @@ ometa PhotonParser <: Parser {
                             | "(" listOf(#expr, ','):as ")"                          -> [#call, p].concat(as)
                             )
                | primExprHd,
+
+  regexpEsc    = ``\\\\'' -> '\\\\'
+               | ``\\/''  -> '\\/',
   primExprHd   = "super" "(" expr:e ")"                                              -> [#super, e] 
                | "(" listOf(#expr, ','):es ")"                                       -> (es.length === 1 ? es[0] : [#begin].concat(es))
                | "this"                                                              -> [#this]
@@ -356,9 +359,9 @@ ometa PhotonParser <: Parser {
                | "name":n                                                            -> [#get, n]
                | "number":n                                                          -> [#number, n]
                | "string":s                                                          -> [#string, s]
-               | spaces fromTo2('/', '/'):re 
+               | spaces '/' ( regexpEsc | ~'/' char )+:re '/'
                  ('g' | 'i' | 'm' | 'y' | empty -> ''):c1 
-                 ('g' | 'i' | 'm' | 'y' | empty -> ''):c2                            -> [#regexp, new RegExp(re, c1+c2)]
+                 ('g' | 'i' | 'm' | 'y' | empty -> ''):c2                            -> [#regexp, '/'+re.join('')+'/'+c1+c2]
                | "eval":s                                                            -> eval(s)
                | "function" funcRest
                | "new" expr:e ?(e[0] === #call)                                      -> [#new, e[1]].concat(e.slice(2))
@@ -538,7 +541,8 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                     .concat(xs.map(function (x) {
                                                                      return [#send, "push", [#get, a], x];}))
                                                                     .concat([[#get, a]])]},
-  unop     ( 'typeof' trans:x                                 -> [#send, "__typeof__",  x]
+  unop     ( 'typeof' [#get 'window']                         -> [#string, "undefined"] 
+           | 'typeof' trans:x                                 -> [#send, "__typeof__",  x]
            | 'delete' ( [#getp trans:x trans:f]               -> [#send, "__delete__",  x, f]
                       | [#get :n]                             -> [#get, #false])
            | ^unop), 
@@ -1013,7 +1017,7 @@ ometa PhotonJSCodeGen {
   break end                                                        -> "break", 
   continue end                                                     -> "continue",
   number   :n                                                      -> String(n),
-  regexp   :e                                                      -> ("regexp(" + String(e) + ")"),
+  regexp   :str_e                                                  -> ("regexp(" + str_e + ")"),
   string   :s                                                      -> s.toProgramString(),
   unop     :op trans:x                                             -> ("(" + op + " " +  x + ")"),
   get      "arguments"                                             -> ("$arguments"),

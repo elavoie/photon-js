@@ -159,6 +159,17 @@ function send(rcv, msg) {
     }
 }
 
+var wrapper_prototype = {
+    // To integrate correctly with the automatic conversion
+    toString:function () { throw new Error("Invalid toString method"); return send(this, "__str__"); },
+    valueOf:function ()  { return send(this, "valueOf"); }
+};
+
+function wrap(o) {
+    o.__proto__ = wrapper_prototype;
+    return o;
+};
+
 function obj(proto, payload, props)
 {
     var map     = objMap(props);
@@ -193,7 +204,7 @@ function obj(proto, payload, props)
         }
     }
 
-    return {
+    return wrap({
         // User-defined properties
         values:values,
 
@@ -203,16 +214,14 @@ function obj(proto, payload, props)
 
         // Object payload
         payload:payload
-    };
+
+    });
 }
 
 function arr(payload)
 {
     var a = obj(root.array, payload);
     a.type = "array";
-    a.toString = function () {
-        return send(this, "__str__");
-    }
     return a;
 }
 
@@ -270,7 +279,7 @@ function clos(f)
 
 function regexp(e)
 {
-    return obj(root.regexp, {code:new RegExp(e)});
+    return obj(root.regexp, {code:RegExp(e)});
 }
 
 function extend(obj, props)
@@ -425,6 +434,10 @@ extend(root.object, obj(null, null, {
     "hasOwnProperty":function (name) {
         return send(this.map, "lookup", name) !== undefined || (this.type === "array" && name >= 0 && name < this.payload.length);
     },
+    "valueOf":bs_clos(function ($this) {
+        print(send($this, "__type__"));
+        throw new Error("Unimplemented valueOf method");
+    })
 }));
 
 extend(root.mapMap, objMap());
@@ -602,6 +615,9 @@ extend(root.primitive, obj(root.object, null, {
     }),
     "toString":bs_clos(function ($this, $closure, x) {
         return $this.toString(x);
+    }),
+    "valueOf":bs_clos(function ($this) {
+        return $this.valueOf();
     }),
     "__not_understood__":bs_clos(function ($this, $closure, msg, args) {
         var rcv = $this;
@@ -869,6 +885,10 @@ extend(root.regexp, obj(root.object, {code:RegExp.prototype}, {
         var r = $this.payload.code(s);
         return r === null ? r : arr(r);
     }),
+    "exec":bs_clos(function ($this, $closure, obj, s) {
+        var r = $this.payload.code.exec(s);
+        return r === null ? r : arr(r);
+    }),
     "test":function (s) {
         assert(typeof s === "string", "Invalid argument type for test method");
         return this.payload.code.test(s);
@@ -1074,6 +1094,7 @@ try
     root.date = obj(root.object, Date.prototype, {
         "__type__":function () { return "date"; },
         "__str__":function ()  { return String(this.payload); },
+        "valueOf":function ()  { return this.payload.valueOf(); },
         "getTime":function ()  { return this.payload.getTime(); } 
     });
     send(Date_ctor, "__set__", "prototype", root.date);
@@ -1099,6 +1120,7 @@ try
 
     var Math_obj = obj(root.object, null, {
         "PI":Math.PI,
+        "E":Math.E,
         "__not_understood__":function (msg, args) {
             return Math[msg].apply(null, args.payload);
         },

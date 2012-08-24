@@ -29,6 +29,7 @@ function partial(n){
     function ppfloat(x) {
         print(x.toFixed(11));
     }
+    print("Step: " + k);
     ppfloat(a1);
     ppfloat(a2);
     ppfloat(a3);
