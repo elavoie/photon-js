@@ -516,7 +516,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                       var e = gensym(); var try_ctxt = _new_context(); 
                                                                       ast = [#global, ctxt, 
                                                                         [#try, _new_context(), 
-                                                                            [#begin].concat([vs]).concat(r.slice(1)),
+                                                                            [#begin].concat(vs).concat(r.slice(1)),
                                                                             e,
                                                                             [#begin, 
                                                                                 [#code, "print(" + e + ".stack)"],
@@ -525,14 +525,14 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                                 [#throw, [#get, e]]],
                                                                             [#get, #undefined]]]
                                                                   } else {
-                                                                      ast = [#global, ctxt, [#begin].concat([vs]).concat(r.slice(1))]; 
+                                                                      ast = [#global, ctxt, [#begin].concat(vs).concat(r.slice(1))]; 
                                                                   } 
                                                                   ast},
   func     :args :ctxt 
            {self.context.enter_function_scope(); args = self.context.replace_arguments(args); self.context.args(args);} 
            trans:body
-           {self.context.leave_function_scope();}:vs          -> [#func, args, ctxt, [#begin].concat([vs]).concat(body.slice(1))],
-  funcStmt :name trans:fct                                    -> {self.context.fct_env.push([name,fct]); [#begin]},
+           {self.context.leave_function_scope();}:vs          -> [#func, args, ctxt, [#begin].concat(vs).concat(body.slice(1))],
+  funcStmt :name {self.context.declare(name)} trans:fct       -> {self.context.fct_env.push([name,fct]); [#begin]},
   var      :name {self.context.declare(name)}
                  ( [#get #undefined]                          -> [#begin]
                  | trans:val                                  -> [#set, [#get, name], val]),
@@ -703,13 +703,15 @@ PhotonDesugar.context = {
                     vs.push(["var", id, ["get", "undefined"]]);
             }
         }
+
+        var fcts = [];
         for (var i = 0; i < this.fct_env.length; ++i) {
             var fctStmt = this.fct_env[i];
-            vs.push(["var", fctStmt[0], fctStmt[1]]);
+            fcts.push(["set", ["get", fctStmt[0]], fctStmt[1]]);
         }
         this.scope   = this.previous_scopes.pop();
         this.fct_env = this.previous_fct_env.pop();
-        return [#begin].concat(vs);
+        return [[#begin].concat(vs), [#begin].concat(fcts)];
     },
     declare:function (id) {
         if (this.scope[id] === undefined) {

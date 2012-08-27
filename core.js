@@ -161,7 +161,7 @@ function send(rcv, msg) {
 
 var wrapper_prototype = {
     // To integrate correctly with the automatic conversion
-    toString:function () { throw new Error("Invalid toString method"); return send(this, "__str__"); },
+    toString:function () { return send(this, "__str__"); },
     valueOf:function ()  { return send(this, "valueOf"); }
 };
 
@@ -590,6 +590,9 @@ extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
     "__typeof__":function () {
         return "function";
     },
+    "valueOf":function () {
+        return this;
+    },
     "apply":function (rcv, args) {
         assert((typeof this.payload.code) === "function" && (args.type === "array"));
         return this.payload.code.apply(null, [rcv, this].concat(args.payload));
@@ -773,6 +776,12 @@ extend(root.array, obj(root.object, [], {
     },
     "__str__":function () {
         return String(this.payload.map(function (x) { return send(x, "__str__"); }).join(","));
+    },
+    "toString":function () {
+        return send(this, "__str__");
+    },
+    "valueOf":function () {
+        return this.payload;
     },
     "concat":function (arr2) {
         assert(send(arr2, "__type__") === "array");
