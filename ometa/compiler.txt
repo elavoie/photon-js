@@ -35,6 +35,7 @@ ometa PhotonASTTraversal {
   begin    trans:x end,
   begin    trans*:xs,
   func     :args :ctxt trans:body,  
+  funcStmt :name trans:fct,  
   call     trans:fn trans*:args,
   ccall    trans:fn trans*:args,
   send     :msg trans:recv trans*:args,
@@ -100,6 +101,7 @@ ometa PhotonASTCopy {
   begin    trans:x end                          -> [#begin, x],
   begin    trans*:xs                            -> [#begin].concat(xs),
   func     :args :ctxt trans:body               -> [#func, args, ctxt, body],  
+  funcStmt :name trans:fct                      -> [#funcStmt, name, fct],
   call     trans:fn trans*:args                 -> [#call, fn].concat(args),
   ccall    trans:fn trans*:args                 -> [#ccall, fn].concat(args),
   send     :msg trans:recv trans*:args          -> [#send, msg, recv].concat(args),
@@ -418,7 +420,7 @@ ometa PhotonParser <: Parser {
                | "with" "(" expr:x ")" stmt:s                                        -> [#with, x, s]
                | expr:e sc                                                           -> e
                | ";"                                                                 -> [#get, "undefined"],
-  srcElem      = "function" "name":n funcRest:f                                      -> {f[2].name = n; [#var, n, f]}
+  srcElem      = "function" "name":n funcRest:f                                      -> {f[2].name = n; [#funcStmt, n, f]}
                | "macro" "name":n funcRest:f                                         -> [#macro, n].concat(f.slice(1))
                | stmt,
   srcElems     = srcElem*:ss                                                         -> [#begin].concat(ss),
@@ -509,7 +511,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
   global   :ctxt 
            {self.context.enter_function_scope();}
            trans:r                                      
-           {self.context.leave_global_scope();}:vs          -> {var ast;
+           {self.context.leave_function_scope("global");}:vs  -> {var ast;
                                                                   if (photon.genTryCatch) {
                                                                       var e = gensym(); var try_ctxt = _new_context(); 
                                                                       ast = [#global, ctxt, 
@@ -530,6 +532,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
            {self.context.enter_function_scope(); args = self.context.replace_arguments(args); self.context.args(args);} 
            trans:body
            {self.context.leave_function_scope();}:vs          -> [#func, args, ctxt, [#begin].concat([vs]).concat(body.slice(1))],
+  funcStmt :name trans:fct                                    -> {self.context.fct_env.push([name,fct]); [#begin]},
   var      :name {self.context.declare(name)}
                  ( [#get #undefined]                          -> [#begin]
                  | trans:val                                  -> [#set, [#get, name], val]),
@@ -680,30 +683,32 @@ PhotonDesugar.context = {
         var that = Object.create(PhotonDesugar.context);
         that.scope = null;
         that.previous_scopes = [];
+        that.fct_env = null;
+        that.previous_fct_env = [];
         return that;
     }, 
     enter_function_scope:function () {
         this.previous_scopes.push(this.scope);    
         this.scope = {};
+        this.previous_fct_env.push(this.fct_env);
+        this.fct_env = [];
     },
-    leave_global_scope:function () {
+    leave_function_scope:function (type) {
         var vs = [];
         for (id in this.scope) {
             if (this.scope[id] === false) {
-                vs.push(["set", ["get", id], ["get", "undefined"]]);
+                if (type === "global")
+                    vs.push(["set", ["get", id], ["get", "undefined"]]);
+                else
+                    vs.push(["var", id, ["get", "undefined"]]);
             }
         }
-        this.scope = this.previous_scopes.pop();
-        return [#begin].concat(vs);
-    },
-    leave_function_scope:function () {
-        var vs = [];
-        for (id in this.scope) {
-            if (this.scope[id] === false) {
-                vs.push(["var", id, ["get", "undefined"]]);
-            }
+        for (var i = 0; i < this.fct_env.length; ++i) {
+            var fctStmt = this.fct_env[i];
+            vs.push(["var", fctStmt[0], fctStmt[1]]);
         }
-        this.scope = this.previous_scopes.pop();
+        this.scope   = this.previous_scopes.pop();
+        this.fct_env = this.previous_fct_env.pop();
         return [#begin].concat(vs);
     },
     declare:function (id) {
