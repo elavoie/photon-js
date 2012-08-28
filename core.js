@@ -437,7 +437,10 @@ extend(root.object, obj(null, null, {
     "valueOf":bs_clos(function ($this) {
         print(send($this, "__type__"));
         throw new Error("Unimplemented valueOf method");
-    })
+    }),
+    "toString":function () {
+        throw new Error("Unimplemented toString method");
+    }
 }));
 
 extend(root.mapMap, objMap());
@@ -559,9 +562,9 @@ root.map.map = root.map;
 extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
     "__ctor__":bs_clos(function ($this, $closure) {
         var o = send(send($this, "__get__", "prototype"), "__new__"); 
-        var r = $this.payload.code.apply(o, [o, $closure].concat(Array.prototype.slice.call(arguments, 2)));
+        var r = $this.payload.code.apply(o, [o, $this].concat(Array.prototype.slice.call(arguments, 2)));
 
-        if (send(r, "__type__") === "primitive")
+        if (isPrimitive(r))
             return o;
         else
             return r;
@@ -1128,8 +1131,13 @@ try
     }));
 
     var Math_obj = obj(root.object, null, {
-        "PI":Math.PI,
-        "E":Math.E,
+        "__get__":function (name) {
+            if (typeof Math[name] === "number")
+                return Math[name];
+            else 
+                throw new Error("Invalid Math property '" + name + "'");
+
+        },
         "__not_understood__":function (msg, args) {
             return Math[msg].apply(null, args.payload);
         },
@@ -1163,6 +1171,11 @@ try
         return regexp(RegExp(obj, mod));
     });
     send(RegExp_ctor, "__set__", "prototype", root.regexp);
+
+    var Error_ctor = bs_clos(function ($this, $closure, s) {
+        assert(isPrimitive(s), "Unsupported conversion from non-primitive object");
+        return new Error(s);
+    });
 
     extend(root.global, obj(root.object, null, { 
         "__get__":bs_clos(function ($this, $closure, name) {
@@ -1210,8 +1223,8 @@ try
         "load":function (s) {
             eval(compile(readFile(s)));
         },
-        "parseInt":function (s) {
-            return parseInt(s);
+        "parseInt":function (s,b) {
+            return parseInt(s,b);
         },
         "parseFloat":function (s) {
             return parseFloat(s);
@@ -1224,6 +1237,7 @@ try
         "Boolean":Boolean_ctor,
         "Number":Number_ctor,
         "RegExp":RegExp_ctor,
+        "Error":Error_ctor,
         "Math":Math_obj,
         "NaN":NaN
     }));

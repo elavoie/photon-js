@@ -1046,8 +1046,8 @@ ometa PhotonJSCodeGen {
   for      exprList:init trans:cond exprList:upd block:body        -> ("for (" +  init +  "; " +  cond +  "; " +  upd +  ")\n" +  body),
   begin    flat:stmts                                              -> stmts,
   func     :args :ctxt block:body                                  -> ("clos(function (" + ["$this", "$closure"].concat(args).join(",") +  ")\n" + body + ")"),
-  //call     trans:fn trans*:args                                    -> ("(function ($closure) {" + "return $closure.payload.code(" + ["root.global", "$closure"].concat(args).join(", ") +  ");})(" + fn + ")"),
-  call     trans:fn trans*:args                                    -> ("(function ($closure) {" + "return send(" + ["$closure", '"call"', "root.global"].concat(args).join(", ") +  ");})(" + fn + ")"),
+  call     trans:fn trans*:args                                    -> { var n = gensym();
+                                                                        ("(function ("+n+") {" + "return send(" + [n, '"call"', "root.global"].concat(args).join(", ") +  ");})(" + fn + ")")},
   send     #__$call__  trans:recv trans*:args                      -> {var syms = args.map(function (x) { return gensym(); }); 
                                                                       ("(function (" + ["$closure"].concat(syms).join(", ") + ") {" + "return $closure.payload.code(" + 
                                                                             [syms[0], "$closure"].concat(syms.slice(1)).join(", ") +  
