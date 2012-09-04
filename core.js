@@ -32,6 +32,8 @@ var global = this;
     "__clone__", 
     "__delete__",
     "__get__",
+    "__in__",
+    "__instanceof__",
     "__itr__",
     "__new__",
     "__set__",
@@ -353,6 +355,27 @@ extend(root.object, obj(null, null, {
 
         return undefined;
     },
+    "__in__":function (name) {
+        var it = send(this, "__itr__");
+        
+        if (typeof name === "string")
+            var strName = name;
+        else if (typeof name === "number") 
+            var strName = String(name);
+        else 
+            error("Invalid name type");
+
+        while (send(it, "valid")) {
+            if (send(it, "get") === strName) {
+                return true;
+            }
+            send(it, "next");
+        }
+        return false;
+    },
+    "__instanceof__":function () {
+        error("Unimplemented __instanceof__ method");
+    },
     "__itr__":function () {
         var _obj     = this;
         var _visited = {};
@@ -597,8 +620,15 @@ extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
         return this;
     },
     "apply":function (rcv, args) {
-        assert((typeof this.payload.code) === "function" && (args.type === "array"));
-        return this.payload.code.apply(null, [rcv, this].concat(args.payload));
+        assert((typeof this.payload.code) === "function");
+
+        if (args.type === "array")
+            args = args.payload;
+        else if (args.type === "arguments")
+            args = args.payload.map(function (x) { return x.payload; });
+        else 
+            throw new Error("Invalid args argument for apply");
+        return this.payload.code.apply(null, [rcv, this].concat(args));
     },
     "call":function () {
         assert(typeof this.payload.code === "function");

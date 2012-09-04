@@ -313,6 +313,7 @@ ometa PhotonParser <: Parser {
                            | ">="         sftExpr:y                                  -> [#binop, ">=",         x, y]
                            | "<"          sftExpr:y                                  -> [#binop, "<",          x, y]
                            | "<="         sftExpr:y                                  -> [#binop, "<=",         x, y]
+                           | "in"         sftExpr:y                                  -> [#binop, "in",         x, y]
                            | "instanceof" sftExpr:y                                  -> [#binop, "instanceof", x, y]
                            )
                | sftExpr,
@@ -550,6 +551,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
                       | [#get :n]                             -> [#get, #false])
            | ^unop), 
   binop    ( 'instanceof' trans:x trans:y                     -> [#send, "__instanceof__", x, y]
+           | 'in'         trans:x trans:y                     -> [#send, "__in__", y, x]
            | ^binop),
   getp     trans:x trans:fd                                   -> [#send, "__get__", x, fd],
   mset     ( ([#getp trans:rcv trans:fd]):lhs :op trans:rhs   -> {var id_rcv = gensym(); var id_fd = gensym();
