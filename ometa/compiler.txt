@@ -348,6 +348,19 @@ ometa PhotonParser <: Parser {
                                   | keyword:k -> k[0]):f                             -> [#getp, p, [#string, f]]
                             | "(" listOf(#expr, ','):as ")"                          -> [#call, p].concat(as)
                             )
+               | newExpr 
+               | primExprHd,
+               
+  newExpr      = "new" ( innerNewExpr:e "(" listOf(#expr, ','):as ")" 
+                       | expr:e {[]}:as )                                            -> [#new, e].concat(as)
+               | primExprHd,
+
+  innerNewExpr = newExpr:p  ( "[@" expr:i "]"                                        -> [#gets, p, i]
+                            | "["  expr:i "]"                                        -> [#getp, p, i]
+                            | "." ("name":n
+                                  | keyword:k -> k[0]):f                             -> [#getp, p, [#string, f]]
+                            )
+               | newExpr
                | primExprHd,
 
   regexpEsc    = ``\\\\'' -> '\\\\'
@@ -367,7 +380,6 @@ ometa PhotonParser <: Parser {
                  ('g' | 'i' | 'm' | 'y' | empty -> ''):c2                            -> [#regexp, '/'+re.join('')+'/'+c1+c2]
                | "eval":s                                                            -> eval(s)
                | "function" funcRest
-               | "new" expr:e ?(e[0] === #call)                                      -> [#new, e[1]].concat(e.slice(2))
                | "let" "(" listOf(#binding, ','):bs ")" stmt:s                       -> [#let, _new_context(), [#begin].concat(bs), s]
                | "[" listOf(#expr, ','):es "]"                                       -> [#arr].concat(es)
                | json,
@@ -397,9 +409,8 @@ ometa PhotonParser <: Parser {
                        ";" ( listOf(#expr, ','):es            -> [#begin].concat(es)
                            | empty -> [#get, 'undefined'] ):u
                        ")" stmt:s                                                    -> [#for, i, c, u, s]
-               | "for" "(" ( "var" binding
-                           | expr                                             ):v
-                      "in" expr:e
+               | "for" "(" ( "var" binding:v "in" expr:e
+                           | expr:fe ?(fe[0] === #binop && fe[1] === #in) {fe[2]}:v {fe[3]}:e )
                        ")" stmt:s                                                    -> [#forIn, v, e, s]
                | "switch" "(" expr:e ")" "{"
                    ( "case" expr:c ":" srcElems:cs -> [#case, c, cs]
