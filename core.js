@@ -41,7 +41,9 @@ var global = this;
     "__type__",
     "__typeof__",
     "__not_understood__",
-    "hasOwnProperty"
+    "hasOwnProperty",
+    "valueOf",
+    "toString"
 ].forEach(function (p) { root.reservedProperty[p] = true; });
 
 function copy(obj)
@@ -1164,7 +1166,9 @@ try
         "__get__":function (name) {
             if (typeof Math[name] === "number")
                 return Math[name];
-            else 
+            else if (name === "sin") {
+                return send(send(root.object, "__get__", "__get__"), "call", this, name); 
+            } else 
                 throw new Error("Invalid Math property '" + name + "'");
 
         },
