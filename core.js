@@ -823,28 +823,51 @@ extend(root.array, obj(root.object, [], {
     "__str__":function () {
         return String(this.payload.map(function (x) { return send(x, "__str__"); }).join(","));
     },
-    "toString":function () {
-        return send(this, "__str__");
-    },
-    "valueOf":function () {
-        return this.payload;
-    },
     "concat":function (arr2) {
         assert(send(arr2, "__type__") === "array");
         return arr(this.payload.concat(arr2.payload));
     },
-    "push":function (value) {
-        return this.payload.push(value);
+    "forEach":function (f, obj) {
+        var a = this; 
+        function g(x, i) {
+            return f.payload.code.call(null, this, f, x, i, a);
+        }
+        this.payload.forEach(g, obj);
     },
-    "pop":function (value) {
-        return this.payload.pop();
-    },
-    "slice":function (from, to) {
-        return arr(this.payload.slice(from, to));
+    "indexOf":function () { 
+        error("Unimplemented");
     },
     "join":function (sep) {
         return this.payload.join(sep);
     },
+    "lastIndexOf":function () {
+        error("Unimplemented");
+    },
+    "map":function (f, obj) {
+        var a = this; 
+        function g(x, i) {
+            return f.payload.code.call(null, this, f, x, i, a);
+        }
+        return arr(this.payload.map(g, obj));
+    },
+    "pop":function (value) {
+        return this.payload.pop();
+    },
+    "push":function (value) {
+        return this.payload.push(value);
+    },
+    "reverse":function () {
+        error("Unimplemented");
+    },
+    "shift":function () {
+        error("Unimplemented");
+    },
+    "slice":function (from, to) {
+        return arr(this.payload.slice(from, to));
+    },
+    "splice":bs_clos(function ($this) {
+        return arr($this.payload.splice.apply($this.payload, Array.prototype.slice.call(arguments, 2)));
+    }),
     "sort":function (f) {
         if (f !== undefined) {
             var g = function (a, b) {
@@ -854,6 +877,15 @@ extend(root.array, obj(root.object, [], {
             var g = f;
         }
         this.payload.sort(g);
+    },
+    "toString":function () {
+        return send(this, "__str__");
+    },
+    "unshift":bs_clos(function ($this, $closure) { 
+        return $this.payload.unshift.apply($this.payload, Array.prototype.slice.call(arguments, 2));
+    }),
+    "valueOf":function () {
+        return this.payload;
     }
 }));
 
@@ -1167,7 +1199,9 @@ try
         return String(obj);
     });
     root.string = obj(root.object, "", {
-
+        "concat":bs_clos(function ($this, $closure) {
+            return String.prototype.concat.apply($this, Array.prototype.slice.call(arguments, 2));
+        })
     });
     send(String_ctor, "__set__", "prototype", root.string);
     send(String_ctor, "__set__", "fromCharCode", bs_clos(function ($this, $closure) {
@@ -1303,6 +1337,9 @@ try
         },
         "parseFloat":function (s) {
             return parseFloat(s);
+        },
+        "readFile":function (s) {
+            return readFile(s);
         },
         "root":env,
         "Object":Object_ctor,
