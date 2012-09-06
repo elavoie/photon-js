@@ -375,9 +375,20 @@ extend(root.object, obj(null, null, {
         }
         return false;
     },
-    "__instanceof__":function () {
-        error("Unimplemented __instanceof__ method");
-    },
+    "__instanceof__":bs_clos(function ($this, $closure, Fct) {
+
+        if (isPrimitive($this)) return false;
+        
+        var prototype = send(Fct, "__get__", "prototype");
+        var obj = $this;
+        while (obj !== null) {
+            if (obj === prototype)
+                return true;
+
+            obj = obj.prototype;
+        }
+        return false;
+    }),
     "__itr__":function () {
         var _obj     = this;
         var _visited = {};
@@ -646,10 +657,13 @@ extend(root.primitive, obj(root.object, null, {
                 return $this.length;
             else if (typeof name === "number")
                 return $this[name];
+            else
+                return send(root.string, "__get__", name);
+        } else if (typeof $this === "number") {
+            return send(root.number, "__get__", name);
         }
-            
 
-        error("TypeError: Invalid __get__ operation on primitive value '" + $this + "'");
+        error("TypeError: Invalid __get__(" + name + ") operation on primitive value '" + $this + "' of type " + typeof $this);
     }),
     "toString":bs_clos(function ($this, $closure, x) {
         return $this.toString(x);
@@ -704,10 +718,7 @@ extend(root.primitive, obj(root.object, null, {
         throw new Error("Object " + $this + " has no method '" + msg + "'");
     }),
     "__set__":bs_clos(function ($this, $closure, name, value) {
-        //if (isPrimitive(this))
         error("TypeError: Invalid __set__ operation on primitive value '" + $this + "' for property '" + name + "'");
-        //else
-        //    return send(send(root.object, "__get__", "__set__"), "call", this, name, value); 
     }),
     "__str__":bs_clos(function ($this) {
         return String($this);
@@ -952,6 +963,7 @@ try
 {
     //print("Creating global object");
     root.global = send(root.object, "__new__");
+    $this = root.global;
 
     //print("Adding an inspection function");
     var inspect_fn = bs_clos(function ($this, $closure, s, max) { 
@@ -1166,7 +1178,23 @@ try
         "__get__":function (name) {
             if (typeof Math[name] === "number")
                 return Math[name];
-            else if (name === "sin") {
+            else if (name in {
+                "max":true, 
+                "min":true, 
+                "sin":true, 
+                "abs":true, 
+                "floor":true, 
+                "ceil":true, 
+                "round":true,
+                "exp":true,
+                "log":true,
+                "cos":true,
+                "tan":true,
+                "asin":true,
+                "acos":true,
+                "atan":true,
+                "sqrt":true,
+                "pow":true}) {
                 return send(send(root.object, "__get__", "__get__"), "call", this, name); 
             } else 
                 throw new Error("Invalid Math property '" + name + "'");
@@ -1175,9 +1203,22 @@ try
         "__not_understood__":function (msg, args) {
             return Math[msg].apply(null, args.payload);
         },
-        "sin":function (x) {
-            return Math.sin(x);
-        }
+        "sin":function (x) { return Math.sin(x); },
+        "max":function ()  { return Math.max.apply(this, arguments); }, 
+        "min":function ()  { return Math.min.apply(this, arguments); },
+        "abs":function (x) { return Math.abs(x); },
+        "floor":function (x) { return Math.floor(x); },
+        "ceil":function (x) { return Math.ceil(x); },
+        "round":function (x) { return Math.round(x); },
+        "exp":function (x) { return Math.exp(x); },
+        "log":function (x) { return Math.log(x); },
+        "cos":function (x) { return Math.cos(x); },
+        "tan":function (x) { return Math.tan(x); },
+        "asin":function (x) { return Math.asin(x); },
+        "acos":function (x) { return Math.acos(x); },
+        "atan":function (x) { return Math.atan(x); },
+        "sqrt":function (x) { return Math.sqrt(x); },
+        "pow":function (x,y) { return Math.pow(x,y); }
     });
 
     var Boolean_ctor = bs_clos(function ($this, $closure, obj) {

@@ -49,6 +49,7 @@ ometa PhotonASTTraversal {
   case     trans:x trans:y,
   default          trans:y,
   regexp   :e,
+  exprSeq  trans*:es,
 
   ref      :s,
   gets     trans:x trans:fd,
@@ -115,6 +116,7 @@ ometa PhotonASTCopy {
   case     trans:x trans:y                      -> [#case, x, y],
   default          trans:y                      -> [#default, y],
   regexp   :e                                   -> [#regexp, e],
+  exprSeq  trans*:es                            -> [#exprSeq].concat(es),
 
   ref      :s                                   -> [#ref, s],
   gets     trans:x trans:fd                     -> [#gets, x, fd],
@@ -352,10 +354,9 @@ ometa PhotonParser <: Parser {
                | primExprHd,
                
   newExpr      = "new" ( innerNewExpr:e "(" listOf(#expr, ','):as ")" 
-                       | expr:e {[]}:as )                                            -> [#new, e].concat(as)
-               | primExprHd,
+                       | innerNewExpr:e {[]}:as )                                    -> [#new, e].concat(as),
 
-  innerNewExpr = newExpr:p  ( "[@" expr:i "]"                                        -> [#gets, p, i]
+  innerNewExpr = innerNewExpr:p  ( "[@" expr:i "]"                                   -> [#gets, p, i]
                             | "["  expr:i "]"                                        -> [#getp, p, i]
                             | "." ("name":n
                                   | keyword:k -> k[0]):f                             -> [#getp, p, [#string, f]]
@@ -366,7 +367,7 @@ ometa PhotonParser <: Parser {
   regexpEsc    = ``\\\\'' -> '\\\\'
                | ``\\/''  -> '\\/',
   primExprHd   = "super" "(" expr:e ")"                                              -> [#super, e] 
-               | "(" listOf(#expr, ','):es ")"                                       -> (es.length === 1 ? es[0] : [#begin].concat(es))
+               | "(" listOf(#expr, ','):es ")"                                       -> (es.length === 1 ? es[0] : [#exprSeq].concat(es))
                | "this"                                                              -> [#this]
                | "$closure"                                                          -> [#closure]
                | "$arguments" "[" expr:i "]"                                         -> [#arguments, i]
@@ -637,23 +638,6 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                                 .concat([body])
                                                                                 .concat([[#send, "next", [#get, it]]])],
                                                                         [#get, "undefined"]]]},
-  /*
-  new      trans:fn trans*:args                               -> {var o = gensym(); var r = gensym(); var f = gensym();
-                                                                  [#let, _new_context(),
-                                                                      [#begin, 
-                                                                          [#var, o, [#get, #undefined]],
-                                                                          [#var, r, [#get, #undefined]],
-                                                                          [#var, f, fn]],
-                                                                      [#begin,
-                                                                          [#set, [#get, o], [#send, "__new_default__", [#send, "__get__", [#get, f], [#string, "prototype"]]]],
-                                                                          [#set, [#get, r], [#send, "call", [#get, f], [#get, o]].concat(args)],
-                                                                          [#condExpr,
-                                                                              [#binop, "===", 
-                                                                                  [#send, "__typeof__",  [#get, r]],
-                                                                                  [#string, "object"]],
-                                                                              [#get, r],
-                                                                              [#get, o]]]]},
-  */
   new      trans:fn trans*:args                               -> [#send, "__ctor__", fn].concat(args),
   json     trans*:props                                       -> {var o = gensym();
                                                                   [#let, _new_context(), 
@@ -1073,6 +1057,7 @@ ometa PhotonJSCodeGen {
   switch   trans:x inc trans*:cases dec                            -> ("switch (" +  x +  ")\n" +  self.ilvl() +  "{\n" +  cases.join("\n") +  self.ilvl() +  "}"),
   case     trans:x inc block:y dec                                 -> (self.ilvl() + "case " + x + ":\n" + y),
   default          inc block:y dec                                 -> (self.ilvl() + "default:\n" +  y),
+  exprSeq  trans*:es                                               -> ("(" + es.join(", ") + ")"),
 
   ref      :s                                                      -> s,
   code     :c                                                      -> c,
