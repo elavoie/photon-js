@@ -84,13 +84,21 @@ function isPrimitive(x)
     return typeof x === "number" || typeof x === "string" || x === undefined || x === null || x === true || x === false;
 }
 
+function getProp(obj, name)
+{
+    return obj.values[obj.map.payload.properties[name]];
+}
+
+function isMap(obj) {
+    return !isPrimitive(obj) && obj.map === obj.map.map;
+}
+
+
 function bind(msg, rcv) {
-    if (isPrimitive(rcv))
-    {
+    if (isPrimitive(rcv)) {
         return bind(msg, root.primitive);
-    } else if (rcv.map === rcv.map.map && msg === "lookup")
-    {
-        return root.map.values[root.map.payload.properties.lookup];    
+    } else if (rcv === rcv.map && msg === "lookup") {
+        return getProp(root.map, "lookup");     
     } 
 
     while (rcv !== null)
@@ -114,34 +122,24 @@ function bind(msg, rcv) {
     return null;
 }
 
-function getProp(obj, name)
-{
-    return obj.values[obj.map.payload.properties[name]];
-}
-
 function send(rcv, msg) {
     var method = bind(msg, rcv);
 
     var args = Array.prototype.slice.call(arguments, 2).map(function (x) {
-        if (isPrimitive(x) || x.prototype !== undefined)
-        {
+        if (isPrimitive(x) || x.prototype !== undefined) {
             return x;
-        } else if (x instanceof Error)
-        {
+        } else if (x instanceof Error) {
             return x.toString();
-        } else
-        {
+        } else {
             error("Invalid object type '" + typeof x + "' for object '" + x + "' in send '" + String(msg) + "'");
         }
     });
 
-    if (method === null)
-    {
+    if (method === null) {
         return send.call(null, rcv, "__not_understood__", msg, arr(args));
     }
 
-    if (typeof method.payload.code !== "function")
-    {
+    if (typeof method.payload.code !== "function") {
         error("Invalid method implementation");
     }
 
@@ -150,12 +148,10 @@ function send(rcv, msg) {
     //return method.payload.code.apply(null, args);
 
     if ((rcv     === getProp(root.function, "call") && msg === "call") ||
-        (!isPrimitive(rcv) && rcv.map === rcv.map.map && msg === "lookup"))
-    {
+        (isMap(rcv) && msg === "lookup")) {
         //print("---> Base case occurred for msg '" + msg + "'");
         return method.payload.code.apply(null, args); 
-    } else
-    {
+    } else {
         //print("Regular case for msg '" + msg + "'");
         //return method.payload.code.apply(null, args); 
         args = [method, "call", rcv].concat(args.slice(2));
