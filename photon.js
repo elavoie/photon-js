@@ -2,27 +2,36 @@ var photon = {};
 
 photon.genTryCatch = false;
 
-photon.compile = function (s, verbose, genTryCatch)
+photon.compile = function (s, opts, genTryCatch)
 {
     if (genTryCatch === undefined)
         genTryCatch = false;
 
+    if (opts === undefined) 
+        opts = options;
+
     var oldGenTryCatch = photon.genTryCatch;
     photon.genTryCatch = genTryCatch;
 
-    if (verbose) print("Parsing");
+    if (opts.verbose) print("Parsing");
     var ast = PhotonParser.matchAll(s, "topLevel");
-    if (verbose) print("MacroExp");
+    if (opts.verbose) print("MacroExp");
     ast = PhotonMacroExp.match(ast, "trans");
-    if (verbose) print("Desugar");
+    if (opts.verbose) print("Desugar");
     ast = PhotonDesugar.match(ast, "trans");
-    if (verbose) print("VarAnalysis");
+    if (opts.verbose) print("VarAnalysis");
     ast = PhotonVarAnalysis.match(ast, "trans");
-    if (verbose) print("VarScopeBinding");
+    if (opts.verbose) print("VarScopeBinding");
     ast = PhotonVarScopeBinding.match(ast, "trans");
-    if (verbose) print("LetConv");
+    
+    if (opts.use_ic) {
+        if (opts.verbose) print("ICConv");
+        ast = PhotonICConv.match(ast, "trans");
+    }
+
+    if (opts.verbose) print("LetConv");
     ast = PhotonLetConv.match(ast, "trans");
-    if (verbose) print("JSCodeGen");
+    if (opts.verbose) print("JSCodeGen");
     var code = PhotonJSCodeGen.match(ast, "trans");
     //print(code);
 
@@ -34,21 +43,19 @@ photon.compile = function (s, verbose, genTryCatch)
 // To allow the run method to compile JS using Photon compiler
 var compile = photon.compile;
 
-photon.execute = function (f)
-{
-    return eval(f);
+photon.execute = function (f) {
+    // Use Function constructor instead of eval for performance
+    // since the evaluated code cannot access the local scope
+    // of execute
+    return (new Function(f))();
 }
 
-photon.eval = function (s)
-{
-    try
-    {
+photon.eval = function (s) {
+    try {
         var f = photon.compile(s);
         return photon.execute(f);
-    } catch(e)
-    {
-        if (e.stack !== undefined)
-        {
+    } catch(e) {
+        if (e.stack !== undefined) {
             print(e.stack);
         }
         throw e;
@@ -59,10 +66,16 @@ photon.eval = function (s)
 
 var src = "";
 var files = [];
+var options = {
+    verbose:false,
+    use_ic:false
+}
 for (var i = 0; i < arguments.length; ++i)
 {
     if (arguments[i] === "-v")
-        var verbose = true;
+        options.verbose = true;
+    else if (arguments[i] === "--use_ic")
+        options.use_ic = true;
     else if (arguments[i] === "-f")
         undefined;
     else
@@ -74,7 +87,7 @@ for (var i = 0; i < files.length; ++i)
     try
     {
         src += "// " + files[i] + "\n";
-        src += photon.compile(readFile(files[i]), verbose, true) + "\n"; 
+        src += photon.compile(readFile(files[i]), options, true) + "\n"; 
     } catch(e)
     {
         print("Error while compiling " + files[i]);
@@ -86,7 +99,7 @@ for (var i = 0; i < files.length; ++i)
     }
 }
 
-if (verbose)
+if (options.verbose)
     writeFile("temp.js", src);
 
 photon.execute(src);

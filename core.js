@@ -27,6 +27,7 @@ var root = {
     reservedProperty:{}
 };
 var global = this;
+var inline_cache_args = false;
 
 [
     "__clone__", 
@@ -43,7 +44,15 @@ var global = this;
     "__not_understood__",
     "hasOwnProperty",
     "valueOf",
-    "toString"
+    "toString",
+    "forEach",
+    "indexOf",
+    "lastIndexOf",
+    "map",
+    "reverse",
+    "shift",
+    "splice",
+    "unshift"
 ].forEach(function (p) { root.reservedProperty[p] = true; });
 
 function copy(obj)
@@ -143,19 +152,51 @@ function send(rcv, msg) {
         error("Invalid method implementation");
     }
 
-    var args = [rcv, method].concat(args);
+    //var args = [rcv, method].concat(args);
     
     //return method.payload.code.apply(null, args);
 
-    if ((rcv     === getProp(root.function, "call") && msg === "call") ||
-        (isMap(rcv) && msg === "lookup")) {
+    if (rcv     === getProp(root.function, "call") && msg === "call") {
         //print("---> Base case occurred for msg '" + msg + "'");
-        return method.payload.code.apply(null, args); 
+        return rcv.payload.code.apply(null, [args[0], rcv].concat(args.slice(1)));
+    } else if (isMap(rcv) && msg === "lookup") {
+        //print("---> Base case occurred for msg '" + msg + "'");
+        return method.payload.code.apply(null, [rcv, method].concat(args)); 
     } else {
         //print("Regular case for msg '" + msg + "'");
         //return method.payload.code.apply(null, args); 
-        args = [method, "call", rcv].concat(args.slice(2));
+        args = [method, "call", rcv].concat(args);
         return send.apply(null, args);
+    }
+}
+
+function caching_send(nb, rcv, msg) {
+    if (!isPrimitive(rcv))
+        inline_cache_args = [nb, rcv, msg];
+    return send.apply(null, Array.prototype.slice.call(arguments, 1));
+}
+
+function cache_get($this, $closure, name) {
+    var obj = inline_cache_args[1];
+    var nb  = inline_cache_args[0];
+    var msg = inline_cache_args[2];
+    var fn  = $closure;
+
+    var map_cache   = "map_cache_"+nb;
+    var fn_cache    = "fn_cache_"+nb;
+    var code_cache  = "code_cache_"+nb;
+
+    inline_cache_args = false;
+
+    print("caching result for __get__ '" + name + "' at " + map_cache);
+
+    global[map_cache]  = obj.map;
+    global[fn_cache]   = fn;
+    global[code_cache] = function ($this, $closure, actual_name) {
+        if (name === actual_name)
+            return $this.values[offset];
+        else 
+            return $closure($this, $closure, actual_name);
     }
 }
 
@@ -336,6 +377,7 @@ extend(root.object, obj(null, null, {
     "__get__":function (name) {
         if (name === "__map__")
             return this.map;
+
 
         var offset;
         var obj = this;
@@ -641,6 +683,27 @@ extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
     },
     "call":function () {
         assert(typeof this.payload.code === "function");
+
+        if (inline_cache_args !== false) {
+            var obj = inline_cache_args[1];
+            var nb  = inline_cache_args[0];
+            var msg = inline_cache_args[2];
+            var fn  = this;
+
+            var map_cache   = "map_cache_"+nb;
+            var fn_cache    = "fn_cache_"+nb;
+            var code_cache  = "code_cache_"+nb;
+
+            inline_cache_args = false;
+
+            //print("caching function for msg '" + msg + "' at " + map_cache);
+            global[map_cache]  = obj.map;
+            global[fn_cache]   = fn;
+            global[code_cache] = fn.payload.code;
+
+            //TODO: Add inline cache to invalidation list
+        }
+
         return this.payload.code.apply(null, [arguments[0], this].concat(Array.prototype.slice.call(arguments, 1)));
     }
 }));
@@ -1290,18 +1353,18 @@ try
             var offset;
             var obj = $this;
 
-            while (obj !== null)
+            while (obj !== null && offset === undefined)
             {
                 offset = send(obj.map, "lookup", name);
 
-                if (offset !== undefined)
-                    return obj.values[offset];
-                else
+                if (offset === undefined)
                     obj = obj.prototype;
-
             }
-            
-            throw new Error("ReferenceError: " + name + " is not defined");
+
+            if (offset === undefined)
+                throw new Error("ReferenceError: " + name + " is not defined");
+
+            return obj.values[offset];
         }),
         "__not_understood__":bs_clos(function ($this, $closure, msg, args)
         {

@@ -69,7 +69,9 @@ ometa PhotonASTTraversal {
   getCell  :id,
   postcode trans:x :s,
   precode  :s trans:x,
-  igetp    trans:x trans:fd
+  igetp    trans:x trans:fd,
+  letLambda :args [trans*:values] trans:body,
+  icSend   :nb :msg trans:recv trans*:args
 }
 
 ometa PhotonASTCopy {
@@ -136,7 +138,9 @@ ometa PhotonASTCopy {
   getCell  :id                                  -> [#getCell, id],
   postcode trans:x :s                           -> [#postcode, x, s],
   precode  :s trans:x                           -> [#precode, s, x],
-  igetp    trans:x trans:fd                     -> [#igetp, x, fd]
+  igetp    trans:x trans:fd                     -> [#igetp, x, fd],
+  letLambda :args [trans*:values] trans:body    -> [#letLambda, args, [values], body],
+  icSend   :nb :msg trans:recv trans*:args      -> [#icSend, nb, msg, recv].concat(args)
 }
 
 ometa PhotonPrettyPrinter 
@@ -997,6 +1001,50 @@ PhotonLetConv.initialize = function () {
   }
 }
 
+ometa PhotonICConv <: PhotonASTCopy {
+  trans      = [:t apply(t):ans]    -> ans,
+  send     :msg trans:recv trans*:args -> {var temp = gensym(); var nb = PhotonICConv.ic_count++;
+                                           this.global_scope.push([#set, [#get, "map_cache_"+nb],  [#get, "null"]], 
+                                                                  [#set, [#get, "fn_cache_"+nb],   [#get, "undefined"]],
+                                                                  [#set, [#get, "code_cache_"+nb], [#get, "undefined"]]);
+                                           if (this.scope === this.global_scope)
+                                               this.scope.push([#set, [#get, temp], [#get, "undefined"]]);
+                                           else 
+                                               this.scope.push([#var, temp, [#get, "undefined"]]);
+                                           [#exprSeq,
+                                                [#set, [#get, temp], recv], 
+                                                //[#send, msg, recv].concat(args)
+                                                [#icSend, nb, msg, [#get, temp]].concat(args)
+                                                ]
+                                           },
+  global :ctxt trans:r                 -> [#global, ctxt, [#begin, [#begin].concat(this.global_scope), r]],
+  func   :args :ctxt 
+         {this.enter_function_scope();} 
+         trans:body        
+         {this.leave_function_scope();}:ts
+                                       -> [#func, args, ctxt, [#begin, [#begin].concat(ts), body]]
+  
+}
+
+PhotonICConv.initialize = function () {
+    this.previous_scopes = [];
+    this.global_scope = [];
+    this.scope = this.global_scope;
+
+    this.enter_function_scope = function () {
+        this.previous_scopes.push(this.scope);   
+        this.scope = [];
+    };
+
+    this.leave_function_scope = function () {
+        var r = this.scope;
+        this.scope = this.previous_scopes.pop();
+        return r;
+    };
+}
+
+PhotonICConv.ic_count = 0;
+
 
 ometa PhotonJSCodeGen {
   trans      = [:t apply(t):ans]    -> ans,
@@ -1051,6 +1099,9 @@ ometa PhotonJSCodeGen {
                                                                        ");})(" + [recv].concat(args).join(", ") +  ")")},
   send     #__$apply__ trans:recv trans*:args                      -> ("__$apply__(" + recv + ", " + args[0] + ", " + args[1] +  ")"),
   send     :msg trans:recv trans*:args                             -> ("send(" + [recv, '"' + msg + '"'].concat(args).join(", ") +  ")"),
+  icSend   :nb :msg trans:recv trans*:args                         -> ("(" + recv + " !== null && " + recv + " !== undefined && " + recv + ".map === map_cache_"+nb + " ? " +
+                                                                       "code_cache_"+nb + "(" + [recv, "fn_cache_"+nb].concat(args).join(", ") + ") : " +
+                                                                       "caching_send(" + [nb, recv, msg.toProgramString()].concat(args).join(", ") + "))"),
   throw    trans:x                                                 -> ("throw " +  x),
   try      :ctxt block:x :name ?(name === undefined) block:c block:f -> ("try\n" + x + " finally\n" + f ),
   try      :ctxt block:x :name block:c block:f                     -> ("try\n" + x + " catch (" + name + ")\n" + c + "finally\n" + f),

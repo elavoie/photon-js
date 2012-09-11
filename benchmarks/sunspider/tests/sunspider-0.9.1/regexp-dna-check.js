@@ -1703,8 +1703,9 @@ clen = dnaInput.length
 
 var dnaOutputString;
 
-for(i in seqs)
+for(i in seqs) {
     dnaOutputString += seqs[i].source + " " + (dnaInput.match(seqs[i]) || []).length + "\n";
+}
  // match returns null if no matches, so replace with empty
 
 for(k in subs)
