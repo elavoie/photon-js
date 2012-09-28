@@ -7,11 +7,14 @@ if __name__ == "__main__":
 
     args = [];
     verbose = False
+    use_ic = False
 
     for i in range(1, len(sys.argv)):
         arg = sys.argv[i]
         if arg == "-v":
             verbose = True
+        elif arg == "--use_ic":
+            use_ic = True
         else:
             args.append(arg)
 
@@ -49,7 +52,7 @@ if __name__ == "__main__":
         subprocess.call(["d8", "%s/%s.js"%(PATH,TEST), "%s/%s-check.js"%(PATH,TEST)], stdout=fout0)
         fout0.close()
         fout1 = file("/tmp/log2.txt", "w")
-        subprocess.call(["d8", "/Users/erick/Recherche/photon-js/photon-js.js", "--expose_gc", "--", "%s/%s.js"%(PATH,TEST), "%s/%s-check.js"%(PATH,TEST)], stdout=fout1)
+        subprocess.call(["d8", "/Users/erick/Recherche/photon-js/photon-js.js", "--expose_gc", "--", "%s/%s.js"%(PATH,TEST), "%s/%s-check.js"%(PATH,TEST)] + (["--use_ic"] if use_ic else []), stdout=fout1)
         fout1.close()
         
         if verbose:
