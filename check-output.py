@@ -21,7 +21,7 @@ if __name__ == "__main__":
             "3d-morph",
             "3d-raytrace",
             "access-binary-trees",
-            #"access-fannkuch",
+            "access-fannkuch",
             "access-nbody",
             "access-nsieve",
             "bitops-3bit-bits-in-byte",
