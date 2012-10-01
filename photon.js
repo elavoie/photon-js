@@ -66,16 +66,17 @@ photon.eval = function (s) {
 
 var src = "";
 var files = [];
-var options = {
-    verbose:false,
-    use_ic:false
-}
+
 for (var i = 0; i < arguments.length; ++i)
 {
     if (arguments[i] === "-v")
         options.verbose = true;
     else if (arguments[i] === "--use_ic")
         options.use_ic = true;
+    else if (arguments[i] === "--trace_ic")
+        options.trace_ic = true;
+    else if (arguments[i] === "--trace_ic_tracker")
+        tracker.setVerbosity(true);
     else if (arguments[i] === "-f")
         undefined;
     else

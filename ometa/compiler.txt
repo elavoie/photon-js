@@ -790,36 +790,47 @@ ometa PhotonVarScopeBinding <: PhotonASTCopy {
 
   get       (#true | #false | #undefined | #null | ?{self.context.is_local_scope()} #arguments):c -> [#get, c],
   get (:id -> {var x = self.context.scope.lookup(id); if (x === undefined) throw "Undefined variable '" + id + "'"; x}):x 
-                                       ( isGlobal(x)             -> [#send, "__get__", [#ref, "root.global"], [#string, id]]
+                                       ( isGlobal(x)             -> [#send, "__get__", [#ref, "root_global"], [#string, id]]
                                        | isLocal(x)              -> [#get, id]
                                        | isEscaping(x)           -> [#getCell, id]
                                        | isCaptured(x)           -> [#closureRefValue, [#closure], [#number, self.context.closure_offsets[id]]]),
 
   call ( [#get :id] ({self.context.scope.lookup(id);}):x ?{x.is_global()} 
-         trans*:args                                             -> [#send, id, [#ref, "root.global"]].concat(args)
+         trans*:args                                             -> [#send, id, [#ref, "root_global"]].concat(args)
        | ^call),
 
   set       ([#get :id] ({self.context.scope.lookup(id)}):x 
-            isGlobal(x) trans:val                                -> [#send, "__set__", [#ref, "root.global"], [#string, id], val]
+            isGlobal(x) trans:val                                -> [#send, "__set__", [#ref, "root_global"], [#string, id], val]
             | ^set),
   func      :args :ctxt 
             {self.context.enter_function_scope(ctxt.scope); ctxt.scope.escaping()}:es
             {ctxt.scope.captured()}:cs
             {self.context.closure_offsets}:os
             trans:body
-            {self.context.leave_function_scope();}               -> {var f = gensym(); 
-                                                                      body = [#begin]
+            {self.context.leave_function_scope();}               -> { body = [#begin]
                                                                              .concat([body[1]])
                                                                              .concat(self.context.gen_escaping(es))
                                                                              .concat(self.context.gen_arguments(args.length, ctxt.scope))
                                                                              .concat(body.slice(2));
-                                                                     [#let, {scope:local_let_scope(self.context.scope, [f])},
-                                                                       [#begin, [#var, f, [#func, args, ctxt, body]]],
-                                                                       [#begin]
-                                                                       .concat(self.context.gen_cell_capture(cs, os, f))
-                                                                       .concat([[#send, "__set__", [#get, f], [#string, "length"], [#number, args.length]], 
-                                                                                [#send, "__set__", [#get, f], [#string, "__id__"], [#string, String(ctxt.name)]],
-                                                                                [#get, f]])]},
+
+                                                                      var capturing = false; 
+                                                                      for (var id in cs) {
+                                                                          capturing = true; 
+                                                                          break;
+                                                                      }
+
+                                                                      if (capturing) {
+                                                                          var f = gensym();
+                                                                          var fun = [#let, {scope:local_let_scope(self.context.scope, [f])},
+                                                                             [#begin, [#var, f, [#func, args, ctxt, body]]],
+                                                                             [#begin]
+                                                                             .concat(self.context.gen_cell_capture(cs, os, f))
+                                                                             .concat([[#get, f]])];
+                                                                      } else {
+                                                                          var fun = [#func, args, ctxt, body];
+                                                                      }
+                                                                      fun;
+                                                                     },
   try :ctxt trans:x :name 
             {self.context.enter_let_scope(ctxt.scope)} 
             {self.context.scope._escaping}:es
@@ -1002,45 +1013,19 @@ PhotonLetConv.initialize = function () {
 }
 
 ometa PhotonICConv <: PhotonASTCopy {
-  trans      = [:t apply(t):ans]    -> ans,
-  send     :msg trans:recv trans*:args -> {var temp = gensym(); var nb = PhotonICConv.ic_count++;
-                                           this.global_scope.push([#set, [#get, "map_cache_"+nb],  [#get, "null"]], 
-                                                                  [#set, [#get, "fn_cache_"+nb],   [#get, "undefined"]],
-                                                                  [#set, [#get, "code_cache_"+nb], [#get, "undefined"]]);
-                                           if (this.scope === this.global_scope)
-                                               this.scope.push([#set, [#get, temp], [#get, "undefined"]]);
-                                           else 
-                                               this.scope.push([#var, temp, [#get, "undefined"]]);
-                                           [#exprSeq,
-                                                [#set, [#get, temp], recv], 
-                                                //[#send, msg, recv].concat(args)
-                                                [#icSend, nb, msg, [#get, temp]].concat(args)
-                                                ]
-                                           },
-  global :ctxt trans:r                 -> [#global, ctxt, [#begin, [#begin].concat(this.global_scope), r]],
-  func   :args :ctxt 
-         {this.enter_function_scope();} 
-         trans:body        
-         {this.leave_function_scope();}:ts
-                                       -> [#func, args, ctxt, [#begin, [#begin].concat(ts), body]]
-  
-}
+  trans      = [:t apply(t):ans]       -> ans,
+  send     :msg?(msg === "__$call__" || msg === "__$apply__") trans:recv trans*:args 
+                                       -> [#send, msg, recv].concat(args),
+  send     :msg 
+           trans:recv trans*:args      -> {var nb = PhotonICConv.ic_count++;
+                                           this.global_scope.push([#set, [#get, "codeCache"+nb], [#code, "initState"]], 
+                                                                  [#set, [#get, "dataCache"+nb], [#code, "["+nb+","+msg.toProgramString()+"]"]]);
+                                           [#icSend, nb, msg, recv].concat(args)},
+  global :ctxt trans:r                 -> [#global, ctxt, [#begin, [#begin].concat(this.global_scope), r]]
+ }
 
 PhotonICConv.initialize = function () {
-    this.previous_scopes = [];
     this.global_scope = [];
-    this.scope = this.global_scope;
-
-    this.enter_function_scope = function () {
-        this.previous_scopes.push(this.scope);   
-        this.scope = [];
-    };
-
-    this.leave_function_scope = function () {
-        var r = this.scope;
-        this.scope = this.previous_scopes.pop();
-        return r;
-    };
 }
 
 PhotonICConv.ic_count = 0;
@@ -1090,18 +1075,16 @@ ometa PhotonJSCodeGen {
   doWhile  block:body trans:cond                                   -> ("do \n" +  body +  "while (" +  cond +  ")"),
   for      exprList:init trans:cond exprList:upd block:body        -> ("for (" +  init +  "; " +  cond +  "; " +  upd +  ")\n" +  body),
   begin    flat:stmts                                              -> stmts,
-  func     :args :ctxt block:body                                  -> ("clos(function (" + ["$this", "$closure"].concat(args).join(",") +  ")\n" + body + ")"),
+  func     :args :ctxt block:body                                  -> ("clos(function (" + ["$this", "$closure"].concat(args).join(",") +  ")\n" + body + "," + ((ctxt.name !== undefined) ? ctxt.name.toProgramString() : "undefined") + ")"),
   call     trans:fn trans*:args                                    -> { var n = gensym();
-                                                                        ("(function ("+n+") {" + "return send(" + [n, '"call"', "root.global"].concat(args).join(", ") +  ");})(" + fn + ")")},
+                                                                        ("(function ("+n+") {" + "return send(" + [n, '"call"', "root_global"].concat(args).join(", ") +  ");})(" + fn + ")")},
   send     #__$call__  trans:recv trans*:args                      -> {var syms = args.map(function (x) { return gensym(); }); 
                                                                       ("(function (" + ["$closure"].concat(syms).join(", ") + ") {" + "return $closure.payload.code(" + 
                                                                             [syms[0], "$closure"].concat(syms.slice(1)).join(", ") +  
                                                                        ");})(" + [recv].concat(args).join(", ") +  ")")},
   send     #__$apply__ trans:recv trans*:args                      -> ("__$apply__(" + recv + ", " + args[0] + ", " + args[1] +  ")"),
   send     :msg trans:recv trans*:args                             -> ("send(" + [recv, '"' + msg + '"'].concat(args).join(", ") +  ")"),
-  icSend   :nb :msg trans:recv trans*:args                         -> ("(" + recv + " !== null && " + recv + " !== undefined && " + recv + ".map === map_cache_"+nb + " ? " +
-                                                                       "code_cache_"+nb + "(" + [recv, "fn_cache_"+nb].concat(args).join(", ") + ") : " +
-                                                                       "caching_send(" + [nb, recv, msg.toProgramString()].concat(args).join(", ") + "))"),
+  icSend   :nb :msg trans:recv trans*:args                         -> ("(codeCache"+nb + "(" + [recv, "dataCache"+nb].concat(args).join(", ") + "))"),
   throw    trans:x                                                 -> ("throw " +  x),
   try      :ctxt block:x :name ?(name === undefined) block:c block:f -> ("try\n" + x + " finally\n" + f ),
   try      :ctxt block:x :name block:c block:f                     -> ("try\n" + x + " catch (" + name + ")\n" + c + "finally\n" + f),

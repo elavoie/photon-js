@@ -9,6 +9,13 @@
 //
 //   * Properties on maps should have a flag to specify if they are enumerable
 
+var options = {
+    verbose:false,
+    use_ic:false,
+    trace_ic:false,
+    trace_ic_tracker:false
+}
+
 var root = {
     arguments:{},
     array:{},
@@ -24,10 +31,10 @@ var root = {
     number:null,
     string:null,
     date:null,
-    reservedProperty:{}
+    reservedProperty:{},
+    defaultCall:null
 };
 var global = this;
-var inline_cache_args = false;
 
 [
     "__clone__", 
@@ -112,7 +119,10 @@ function bind(msg, rcv) {
 
     while (rcv !== null)
     {
-        var offset = send(rcv.map, "lookup", msg);
+        if (Object.prototype.hasOwnProperty.call(rcv.map.payload.properties, msg))
+            var offset = rcv.map.payload.properties[msg]; 
+        else
+            var offset = undefined;
 
         if (offset !== undefined )
         {
@@ -170,33 +180,253 @@ function send(rcv, msg) {
     }
 }
 
-function caching_send(nb, rcv, msg) {
-    if (!isPrimitive(rcv))
-        inline_cache_args = [nb, rcv, msg];
-    return send.apply(null, Array.prototype.slice.call(arguments, 1));
+// Does not reify the call protocol (opaque to modification of the function calling protocol)
+function baseSend(rcv, msg) {
+    var method = bind(msg, rcv);
+
+    var args = Array.prototype.slice.call(arguments, 2).map(function (x) {
+        if (isPrimitive(x) || x.prototype !== undefined) {
+            return x;
+        } else if (x instanceof Error) {
+            return x.toString();
+        } else {
+            error("Invalid object type '" + typeof x + "' for object '" + x + "' in send '" + String(msg) + "'");
+        }
+    });
+
+    if (method === null) {
+        return send.call(null, rcv, "__not_understood__", msg, arr(args));
+    }
+
+    if (typeof method.payload.code !== "function") {
+        error("Invalid method implementation");
+    }
+
+    return method.payload.code.apply(null, [rcv, method].concat(args)); 
 }
 
-function cache_get($this, $closure, name) {
-    var obj = inline_cache_args[1];
-    var nb  = inline_cache_args[0];
-    var msg = inline_cache_args[2];
-    var fn  = $closure;
+// ------------------------- Cache invalidation support -----------------------
 
-    var map_cache   = "map_cache_"+nb;
-    var fn_cache    = "fn_cache_"+nb;
-    var code_cache  = "code_cache_"+nb;
+var tracker;
+(function () {
+    // Use objects as hash tables
+    var objMsg2Cache = {};
+    var cache2ObjMsg = {};
+    var counter = 0;
 
-    inline_cache_args = false;
+    var verbose = options.trace_ic_tracker;
 
-    print("caching result for __get__ '" + name + "' at " + map_cache);
+    function hash(obj) {
+        if (obj.hash === undefined) {
+            obj.hash = counter++;
+        }
+        return obj.hash;
+    }
 
-    global[map_cache]  = obj.map;
-    global[fn_cache]   = fn;
-    global[code_cache] = function ($this, $closure, actual_name) {
-        if (name === actual_name)
-            return $this.values[offset];
-        else 
-            return $closure($this, $closure, actual_name);
+    tracker = {
+        addCacheLink:function (obj, msg, cacheId, cacheData) {
+            while (obj !== null) {
+                if (Object.prototype.hasOwnProperty.call(obj.map.payload.properties, msg)) {
+                    break;
+                }
+                obj = obj.prototype;
+            }
+
+            if ((msg === "call" || msg === "__memoize__") && obj === root.function) {
+                if (verbose) print("Ignoring tracking information for message " + msg + " because it was found on root.function");
+                return;
+            }
+
+            var objHash = hash(obj);
+
+            if (verbose) print("Adding tuple (" + objHash + "," + msg + "," + cacheId + ")");
+
+            if (objMsg2Cache[objHash] === undefined) {
+                objMsg2Cache[objHash] = {};
+            }
+
+            if (objMsg2Cache[objHash][msg] === undefined) {
+                objMsg2Cache[objHash][msg] = {};
+            }
+
+            objMsg2Cache[objHash][msg][cacheId] = cacheData;
+
+            // Remember the (objHash,msg) container for faster reverse lookup
+            if (cache2ObjMsg[cacheId] === undefined) {
+                cache2ObjMsg[cacheId] = {};
+            }
+            cache2ObjMsg[cacheId][objHash+","+msg] = objMsg2Cache[objHash][msg];
+        },
+        flushCaches:function (obj, msg) {
+            if ((msg === "call" || msg === "__memoize__") && obj === root.function) {
+                if (verbose) print("Flushing all caches");
+                var cacheIds = {};
+
+                for (var objHash in objMsg2Cache) {
+                    for (var msg in objMsg2Cache[objHash]) {
+                        for (var cacheId in objMsg2Cache[objHash][msg]) {
+                            cacheIds[cacheId] = true;
+                        }
+                    }
+                }
+
+                var keys = [];
+                for (var cacheId in cacheIds) {
+                    keys.push(cacheId);
+                }
+            } else {
+                var objHash = hash(obj);
+                var keys = [];
+
+                if (objMsg2Cache[objHash] !== undefined && objMsg2Cache[objHash][msg] !== undefined) {
+                    for (var cacheId in objMsg2Cache[objHash][msg]) {
+                        keys.push(cacheId);
+                    }
+                }
+            }
+
+            for (var i = 0; i < keys.length; ++i) {
+                var cacheId = keys[i];
+                this.removeCacheLinks(cacheId);
+                if (verbose) print("Resetting " + cacheId);
+                global[cacheId] = initState;
+            }
+        },
+        removeCacheLinks:function (cacheId) {
+            var keys = [];
+            for (objHashMsg in cache2ObjMsg[cacheId]) {
+                if (verbose) print("Removing tuple (" + objHashMsg + "," + cacheId + ")");
+                keys.push(objHashMsg);
+            }
+
+            // cacheData should be the same for all entries, so we should
+            // reset it only once
+            if (keys.length > 0) {
+                var container = cache2ObjMsg[cacheId][keys[0]];
+                var cacheData = container[cacheId];
+                global["dataCache"+cacheData[0]] = cacheData;
+                global["codeCache"+cacheData[0]] = initState;
+            }
+
+            for (var i = 0; i < keys.length; ++i) {
+                var k = keys[i];
+                var container = cache2ObjMsg[cacheId][k];
+                delete cache2ObjMsg[cacheId][k];
+                delete container[cacheId];
+            }
+        },
+        setVerbosity:function (bool) {
+            verbose = bool;
+        }
+    };
+})();
+
+function initState(rcv, cacheData) {
+    var verbose = options.trace_ic;
+    var codeCacheName = "codeCache"+cacheData[0];
+    var dataCacheName = "dataCache"+cacheData[0];
+
+    var args = Array.prototype.slice.call(arguments, 2).map(function (x) {
+        if (isPrimitive(x) || x.prototype !== undefined) {
+            return x;
+        } else if (x instanceof Error) {
+            return x.toString();
+        } else {
+            error("Invalid object type '" + typeof x + "' for object '" + x + "' in send '" + String(msg) + "'");
+        }
+    });
+
+    var msg = cacheData[1];
+    var method = bind(msg, rcv);
+    if (method === null || isPrimitive(rcv)) {
+        // No caching can done, retry with a regular send
+        return send.apply(null, [rcv, msg].concat(args));
+    }
+    var callFn = bind("call", method);
+    var memoizedCallFn = baseSend(callFn, "__memoize__", method, callFn, arr([rcv].concat(args)), arr(cacheData));
+
+    tracker.addCacheLink(rcv,    msg,           codeCacheName, cacheData);
+    tracker.addCacheLink(method, "call",        codeCacheName, cacheData);
+    tracker.addCacheLink(callFn, "__memoize__", codeCacheName, cacheData);
+
+    if (memoizedCallFn === root.defaultCall) {
+        var memoizedMethod = baseSend(method, "__memoize__", rcv, method, arr(args), arr(cacheData));
+
+        tracker.addCacheLink(method, "__memoize__", codeCacheName, cacheData);
+
+        if (rcv === root_global) {
+            if (verbose) print("-- caching global function call " + msg + " at " + codeCacheName);
+            global[codeCacheName] = memoizedMethod.payload.code;
+            global[dataCacheName] = memoizedMethod;
+        } else {
+            if (verbose) print("-- caching method call " + msg + " at " + codeCacheName);
+            global[codeCacheName] = variableRcv(args.length);
+            cacheData[2] = rcv.map;
+            cacheData[3] = memoizedMethod;
+
+            if (memoizedMethod === undefined) {
+                throw Error("Invalid memoized method");
+            }
+        }
+
+    } else { 
+        if (verbose) print("-- caching call function");
+
+        if (args.length !== 1) throw Error("Unhandled arguments number of " + args.length + " when caching call method");
+        global[codeCacheName] = callState1;
+        cacheData[2] = rcv.map
+        cacheData[3] = method;
+        cacheData[4] = memoizedCallFn;
+    }
+
+    return callFn.payload.code.apply(null, [method, callFn, rcv].concat(args));
+}
+
+function bailout(rcv, cacheData) {
+    if (rcv === undefined || rcv === null ) {
+        throw new Error("Invalid message for '" + rcv + "'");
+    } 
+    // Remove cache from invalidation set(s) and reset data cache
+    tracker.removeCacheLinks("codeCache"+cacheData[0]);
+    cacheData.length = 2;
+
+    // Setup cache
+    return initState.apply(null, [rcv, cacheData].concat(Array.prototype.slice.call(arguments, 2)));
+}
+
+(function () { 
+    var store = [];
+
+    variableRcv = function (argNb) {
+
+        if (store[argNb] !== undefined) return store[argNb];
+
+        var argList = [];
+        for (var i = 0; i < argNb; ++i) {
+            argList.push("arg" + i);
+        }
+        var argStr       = ["rcv", "cacheData"].concat(argList).join(", ");
+        var methodArgStr = ["rcv", "method"].concat(argList).join(", ");
+
+        var code = "" + 
+        "    if (rcv !== undefined && rcv !== null && rcv.map === cacheData[2]) {\n" + 
+        "        var method = cacheData[3];\n" +
+        "        return method.payload.code(" + methodArgStr + ");\n" +
+        "    } else {\n" +
+        "        return bailout(" + argStr + ");\n" +
+        "    }\n";
+        store[argNb] = Function.apply(null, ["rcv", "cacheData"].concat(argList,[code]));
+
+        return store[argNb];
+    }
+})();
+
+
+function callState1(rcv, cacheData, arg0) {
+    if (rcv !== undefined && rcv !== null && rcv.map === cacheData[2]) {
+        return cacheData[4].payload.code(cacheData[3], cacheData[4], rcv, arg0);
+    } else {
+        return bailout(rcv, cacheData, arg0);
     }
 }
 
@@ -311,10 +541,13 @@ function bs_clos(f)
     return obj(root.function, {code:f, cells:[]});
 }
 
-function clos(f)
+function clos(f, id)
 {
-    var g = send(root.function, "__new__");
-    g.payload.code = f;
+    var g = bs_clos(f);
+
+    if (id !== undefined)
+        send(g, "__set__", "__id__", id);
+
     return g;
 }
 
@@ -365,8 +598,9 @@ extend(root.object, obj(null, null, {
             return false;
         } else
         {
-            this.map = send(this.map, "remove", name);
+            tracker.flushCaches(this, name);
 
+            this.map = send(this.map, "remove", name);
             if (offset < this.values.length - 1)
                 this.values[offset] = this.values[this.values.length - 1];
 
@@ -488,10 +722,22 @@ extend(root.object, obj(null, null, {
         var offset = send(this.map, "lookup", name);
         if (offset !== undefined)
         {
+            tracker.flushCaches(this, name);
             return this.values[offset] = value;
         }
         else
         {
+            // Flush caches linked to parent's property name because
+            // this new property can mask the parent's property on the lookup chain
+            var obj = this.prototype;
+            while (obj !== null) {
+                if (send(obj.map, "lookup", name) !== undefined) {
+                    tracker.flushCaches(obj, name); 
+                    break;
+                }
+                obj = obj.prototype;
+            }
+
             this.map = send(this.map, "create", name);
             return this.values[send(this.map, "lookup", name)] = value;
         }
@@ -649,11 +895,16 @@ extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
         {
             var o = send(root.object, "__new__");
             return send(this, "__set__", name, o);
+        } else if (name === "length") {
+            return this.payload.code.length - 2;       
         } else
         {
             return send(send(root.object, "__get__", "__get__"), "call", this, name); 
         }
         
+    },
+    "__memoize__":function () {
+        return this;
     },
     "__new__":function () {
         return obj(root.function, {code:null, cells:[]});
@@ -683,27 +934,6 @@ extend(root.function, obj(root.object, {code:function () {}, cells:[]}, {
     },
     "call":function () {
         assert(typeof this.payload.code === "function");
-
-        if (inline_cache_args !== false) {
-            var obj = inline_cache_args[1];
-            var nb  = inline_cache_args[0];
-            var msg = inline_cache_args[2];
-            var fn  = this;
-
-            var map_cache   = "map_cache_"+nb;
-            var fn_cache    = "fn_cache_"+nb;
-            var code_cache  = "code_cache_"+nb;
-
-            inline_cache_args = false;
-
-            //print("caching function for msg '" + msg + "' at " + map_cache);
-            global[map_cache]  = obj.map;
-            global[fn_cache]   = fn;
-            global[code_cache] = fn.payload.code;
-
-            //TODO: Add inline cache to invalidation list
-        }
-
         return this.payload.code.apply(null, [arguments[0], this].concat(Array.prototype.slice.call(arguments, 1)));
     }
 }));
@@ -1423,7 +1653,8 @@ try
         "global":root.global
     }));
 
-
+    root.defaultCall = send(root.function, "__get__", "call");
+    root_global = root.global; // Alias for performance
 } catch (e)
 {
     if (e.stack)

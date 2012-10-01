@@ -178,11 +178,12 @@ var dataCache1 = [1,"fib"];
 var codeCache2 = initState;
 var dataCache2 = [2,"fib"];
 
-var fib = function ($this, $closure, n) {
-    if (n < 2) return n;
-    return (codeCache1(root_global, dataCache1, n-1)) + 
-           (codeCache2(root_global, dataCache2, n-2));
-}
+try {
+    var fib = function ($this, $closure, n) {
+        if (n < 2) return n;
+        return (codeCache1(root_global, dataCache1, n-1)) + 
+               (codeCache2(root_global, dataCache2, n-2));
+    }
 
 /*
 fib.__memoize__ = (function () {
@@ -211,10 +212,13 @@ fib.call.__memoize__ = function () {
 */
 
 
-print(codeCache0(root_global, dataCache0, 40));
+    print(codeCache0(root_global, dataCache0, 40));
 
-tracker.flushCaches(root_global, "fib");
-//tracker.removeCacheLinks("codeCache0");
+    tracker.flushCaches(root_global, "fib");
+    //tracker.removeCacheLinks("codeCache0");
+} catch (e) {
+
+}
 
 
 
