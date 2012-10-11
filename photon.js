@@ -103,4 +103,4 @@ for (var i = 0; i < files.length; ++i)
 if (options.verbose)
     writeFile("temp.js", src);
 
-photon.execute(src);
+eval(src);

@@ -354,13 +354,14 @@ function initState(rcv, cacheData) {
 
         tracker.addCacheLink(method, "__memoize__", codeCacheName, cacheData);
 
-        if (rcv === root_global) {
+        if (false && rcv === root_global) {
             if (verbose) print("-- caching global function call " + msg + " at " + codeCacheName);
             global[codeCacheName] = memoizedMethod.payload.code;
             global[dataCacheName] = memoizedMethod;
         } else {
             if (verbose) print("-- caching method call " + msg + " at " + codeCacheName);
-            global[codeCacheName] = variableRcv(args.length);
+            //global[codeCacheName] = variableRcv(args.length);
+            global[codeCacheName] = memoizedMethod.payload.code;
             cacheData[2] = rcv.map;
             cacheData[3] = memoizedMethod;
 
@@ -409,7 +410,7 @@ function bailout(rcv, cacheData) {
         var methodArgStr = ["rcv", "method"].concat(argList).join(", ");
 
         var code = "" + 
-        "    if (rcv !== undefined && rcv !== null && rcv.map === cacheData[2]) {\n" + 
+        "    if ( rcv.map === cacheData[2]) {\n" + 
         "        var method = cacheData[3];\n" +
         "        return method.payload.code(" + methodArgStr + ");\n" +
         "    } else {\n" +
@@ -1655,6 +1656,97 @@ try
 
     root.defaultCall = send(root.function, "__get__", "call");
     root_global = root.global; // Alias for performance
+
+    /*
+    // Add memoization of the offset of the property on an object
+    var objectGet = send(root.object, "__get__", "__get__");
+    var memoizedGet = clos(function ($this, cacheData, name) {
+        return $this.values[cacheData[4]];
+    });
+
+    send(objectGet, "__set__", "__memoize__", clos(function ($this, $closure, rcv, method, args, cacheData) {
+        print("Call memoize of __get__ method");
+        var name = args.payload[0]; 
+
+        if (name === "__map__")
+            return method;
+
+        var offset = send(rcv.map, "lookup", name);
+
+        if (offset !== undefined) {
+            print("-- caching get offset " + offset + " at codeCache" + cacheData.payload[0]);
+            cacheData.payload[4] = offset;
+            return memoizedGet;
+        } else {
+            return method;
+        }
+    }));
+
+    var globalObjectGet   = send(root.global, "__get__", "__get__");
+
+    var memoizedGlobalGet = (function () {
+        var store = [];
+
+        return function (offset) {
+            if (store[offset] !== undefined) return store[offset];
+
+            var body = "return $this.values["+offset+"]";
+            store[offset] = clos(new Function ("$this", "$closure", "name", body));
+
+            return store[offset];
+        };
+        
+    })();
+
+    send(globalObjectGet, "__set__", "__memoize__", clos(function ($this, $closure, rcv, method, args, cacheData) {
+        print("Call memoize of __get__ method for global object");
+        var name = args.payload[0]; 
+
+        if (name === "__map__")
+            return method;
+
+        var offset = send(rcv.map, "lookup", name);
+
+        if (offset !== undefined) {
+            print("-- caching global get offset " + offset + " at codeCache" + cacheData.payload[0]);
+            return memoizedGlobalGet(offset);
+        } else {
+            return method;
+        }
+    }));
+
+    var globalObjectSet   = send(root.global, "__get__", "__set__");
+
+    var memoizedGlobalSet = (function () {
+        var store = [];
+
+        return function (offset) {
+            if (store[offset] !== undefined) return store[offset];
+
+            var body = "return $this.values["+offset+"] = value;";
+            store[offset] = clos(new Function ("$this", "$closure", "name", "value", body));
+
+            return store[offset];
+        };
+        
+    })();
+
+    send(globalObjectSet, "__set__", "__memoize__", clos(function ($this, $closure, rcv, method, args, cacheData) {
+        print("Call memoize of __set__ method for global object");
+        var name = args.payload[0]; 
+
+        if (name === "__map__")
+            return method;
+
+        // Force the creation of the property on the object
+        // to obtain the future offset
+        baseSend(rcv, "__set__", name, undefined);
+        var offset = send(rcv.map, "lookup", name);
+        print("-- caching global set offset " + offset + " at codeCache" + cacheData.payload[0]);
+        return memoizedGlobalSet(offset);
+    }));
+    */
+
 } catch (e)
 {
     if (e.stack)

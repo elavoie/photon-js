@@ -1021,6 +1021,10 @@ ometa PhotonICConv <: PhotonASTCopy {
                                            this.global_scope.push([#set, [#get, "codeCache"+nb], [#code, "initState"]], 
                                                                   [#set, [#get, "dataCache"+nb], [#code, "["+nb+","+msg.toProgramString()+"]"]]);
                                            [#icSend, nb, msg, recv].concat(args)},
+  call     trans:fn trans*:args        -> {var nb = PhotonICConv.ic_count++; var msg = "call";
+                                           this.global_scope.push([#set, [#get, "codeCache"+nb], [#code, "initState"]], 
+                                                                  [#set, [#get, "dataCache"+nb], [#code, "["+nb+","+msg.toProgramString()+"]"]]);
+                                           [#icSend, nb, msg, fn].concat(args)},
   global :ctxt trans:r                 -> [#global, ctxt, [#begin, [#begin].concat(this.global_scope), r]]
  }
 
