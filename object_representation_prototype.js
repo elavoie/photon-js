@@ -43,7 +43,9 @@ function extend(obj, props) {
 }
 
 function clos(f, memoizeFn) {
-    f.__memoize__ = memoizeFn;
+
+    if (memoizeFn !== undefined)
+        f.__memoize__ = memoizeFn;
     return obj(root.function, f);
 }
 
@@ -66,6 +68,7 @@ var tracker;
     // Use objects as hash tables
     var objMsg2Cache = {};
     var cache2ObjMsg = {};
+    var msg2ObjNb    = {};
     var counter = 0;
 
     var verbose = false;
@@ -78,9 +81,9 @@ var tracker;
     }
 
     tracker = {
-        addCacheLink:function (obj, msg, cacheId, cacheData) {
+        addCacheLink:function (obj, msg, cacheId, dataCache) {
             while (obj !== null) {
-                if (hasProp(obj.map.payload.properties, msg)) {
+                if (hasProp(obj.payload, msg)) {
                     break;
                 }
                 obj = obj.prototype;
@@ -103,7 +106,14 @@ var tracker;
                 objMsg2Cache[objHash][msg] = {};
             }
 
-            objMsg2Cache[objHash][msg][cacheId] = cacheData;
+            objMsg2Cache[objHash][msg][cacheId] = dataCache;
+
+            // Count the number of entries pertaining to a given message
+            if (msg2ObjNb[msg] === undefined) {
+                msg2ObjNb[msg] = 1;
+            } else {
+                msg2ObjNb[msg]++;
+            }
 
             // Remember the (objHash,msg) container for faster reverse lookup
             if (cache2ObjMsg[cacheId] === undefined) {
@@ -112,8 +122,9 @@ var tracker;
             cache2ObjMsg[cacheId][objHash+","+msg] = objMsg2Cache[objHash][msg];
         },
         hasCacheLinkForMsg:function (msg) {
-            // TODO
-            throw new Error("Unimplemented hasCacheLinkForMsg");
+            var bool =  msg2ObjNb[msg] !== undefined && msg2ObjNb[msg] > 0;
+            //print("hasCacheLinkForMsg("+msg+") === " + bool);
+            return bool;
         },
         hasCacheLinkForObjMsg:function (obj, msg) {
             var objHash = hash(obj);
@@ -161,15 +172,19 @@ var tracker;
             for (objHashMsg in cache2ObjMsg[cacheId]) {
                 if (verbose) print("Removing tuple (" + objHashMsg + "," + cacheId + ")");
                 keys.push(objHashMsg);
+
+                var msg = objHashMsg.split(",").slice(1).join(",");
+                msg2ObjNb[msg]--;
+                
             }
 
-            // cacheData should be the same for all entries, so we should
+            // dataCache should be the same for all entries, so we should
             // reset it only once
             if (keys.length > 0) {
                 var container = cache2ObjMsg[cacheId][keys[0]];
-                var cacheData = container[cacheId];
-                global["dataCache"+cacheData[0]] = cacheData;
-                global["codeCache"+cacheData[0]] = initState;
+                var dataCache = container[cacheId];
+                global["dataCache"+dataCache[0]] = dataCache;
+                global["codeCache"+dataCache[0]] = initState;
             }
 
             for (var i = 0; i < keys.length; ++i) {
@@ -185,27 +200,61 @@ var tracker;
     };
 })();
 
-var setPropTracker = {
-    addCacheLink:function (name, cacheId, cacheData) {
-        throw new Error("Unimplemented addCacheLink");
-    },
-    flushCaches:function (name) {
-        throw new Error("Unimplemented flushCaches");
-    }
-};
+var setPropTracker;
+
+(function () {
+    var msg2Cache = {};
+    var verbose = false;
+
+    setPropTracker = {
+        addCacheLink:function (name, cacheId, dataCache) {
+            if (verbose) print("Adding tuple ("+name+","+cacheId+") to setPropTracker");
+
+            if (msg2Cache[name] === undefined) {
+                msg2Cache[name] = {};
+            }
+
+
+            msg2Cache[name][cacheId] = dataCache;
+        },
+        flushCaches:function (name) {
+            if (msg2Cache[name] === undefined) {
+                return;
+            }
+
+            var empty = true;
+            for (var cacheId in msg2Cache[name]) {
+                empty = false;
+                var dataCache = msg2Cache[name][cacheId];
+                if (verbose) print("Removing tuple ("+name+","+cacheId+") from setPropTracker");
+                global["dataCache"+dataCache[0]] = dataCache;
+                global["codeCache"+dataCache[0]] = initState;
+            }
+
+            if (empty) 
+                delete msg2Cache[name];
+        }
+    };
+})();
+
+function error(string) {
+    throw new Error(string);
+}
 
 try {
 
-// TODO: Tell add a parameter in cacheData to tell if
-//       parameter values are constant
 extend(root.object, {
     __get__:clos(function ($this, $closure, name) {
         return $this.payload[name];
-    }, clos(function ($this, $closure, rcv, method, args) {
+    }, clos(function ($this, $closure, rcv, method, args, dataCache) {
         var name = args[0];
-        return clos(new Function ("$this", "$closure", "name", 
-            "return $this.payload."+name+";"
-        ));
+        if (dataCache[2][1] === "string") {
+            return clos(new Function ("$this", "$closure", "name", 
+                "return $this.payload."+name+";"
+            ));
+        } else {
+            return $this;
+        }
     })),
     __set__:clos(function ($this, $closure, name, value) {
         if (tracker.hasCacheLinkForMsg(name)) {
@@ -219,24 +268,23 @@ extend(root.object, {
             }
         }
         return $this.payload[name] = value;
-    }, clos(function ($this, $closure, rcv, method, args, cacheData) {
+    }, clos(function ($this, $closure, rcv, method, args, dataCache) {
         var name = args[0];
-        var cacheId = cacheData[0];
+        var cacheId = dataCache[0];
 
-        // If the property has been used as a method on any object,
-        // use the regular __set__ method, otherwise use the optimized
-        // version
-        if (tracker.hasCacheLinkForMsg(name)) {
+        // If the property has never been used as a method on any object,
+        // use the optimized version otherwise use the regular version
+        if (!tracker.hasCacheLinkForMsg(name) && dataCache[2][1] === "string") {
+            setPropTracker.addCacheLink(name, cacheId, dataCache);
+            return clos(new Function ("$this", "$closure", "name", "value", 
+                "return $this.payload."+name+" = value;"
+            ));
+        } else { 
             // Note: This version is monotonic on a per cache basis: 
             // once a property has been identified  method-like,
             // unless something flushes the cache, the optimized version
             // will never be used again
             return $this;
-        } else { 
-            setPropTracker.addCacheLink(name, cacheId, cacheData);
-            return clos(new Function ("$this", "$closure", "name", "value", 
-                "return $this.payload."+name+" = value;"
-            ));
         }
     }))
 });
@@ -245,7 +293,7 @@ extend(root.function, {
     "apply":clos(function ($this, $closure, obj, args) {
         return Function.prototype.apply.call($this.payload, null, [obj, $this].concat(args));
     }),
-    "__memoize__":clos(function ($this, $closure, rcv, method, args) {
+    "__memoize__":clos(function ($this, $closure, rcv, method, args, dataCache) {
         return $this;
     })
 });
@@ -265,21 +313,24 @@ var o  = obj(root.object, {
 var o2 = obj(o, {bar:2});
 
 function initState(obj, dataCache) {
+    var verbose = true;
     var args = Array.prototype.slice.call(arguments, 2);
-
     var msg = dataCache[1];
 
-    var codeCache = "codeCache" + dataCache[0];
-    var dataCache = "dataCache" + dataCache[0];
+    var codeCacheName = "codeCache" + dataCache[0];
+    var dataCacheName = "dataCache" + dataCache[0];
 
     var m = obj.payload[msg];
-    //m = send(m, "__memoize__", obj, m, args);
 
     if (m !== undefined) {
-        print("caching message send " + msg);
+        tracker.addCacheLink(obj, msg, dataCache[0], dataCache);
+        m = send(m, "__memoize__", obj, m, args, dataCache);
+        tracker.addCacheLink(m,  "__memoize__", dataCache[0], dataCache);
+
+        if (verbose) print("caching message send " + msg);
         setPropTracker.flushCaches(msg);
-        global[codeCache] = m.payload;
-        global[dataCache] = m;
+        global[codeCacheName] = m.payload;
+        global[dataCacheName] = m;
     } else {
         throw new Error("Message not understood " + msg);
     }
@@ -288,20 +339,48 @@ function initState(obj, dataCache) {
 }
 
 var codeCache0 = initState;
-var dataCache0 = [0, "ident"];
+var dataCache0 = [0, "__set__", ["unknown", "string", "number"]];
+var codeCache1 = initState;
+var dataCache1 = [1, "foo",     ["unknown"]];
+var codeCache2 = initState;
+var dataCache2 = [2, "__set__", ["unknown", "string", "number"]];
+
+codeCache0 = function ($this, $closure, name, value) {
+    return $this.payload.foo = value;
+}
 
 try { 
     (function () {
         var t = 0; 
-        var scale = 1000000;
+        var scale = 5000000;
         for (var i = 0; i < 200*scale; ++i) {
-            t += codeCache0(o2, dataCache0, i);
+            t += codeCache0(o2, dataCache0, "foo", 1);
+            //t += (o2.payload.foo = 1);
+            /*
+            o2.payload.foo = 1;
+            t += o2.payload.foo;
+            */
             //t += send(o2, "__get__", "foo");  
         }
         print(t/scale);
+
+        /*
+        send(o2, "__set__", "foo", clos(function () { return 1; }));
+        print(codeCache1(o2, dataCache1));
         //print(send(o2, "__get__", "foo"));
         //print(send(o,  "__get__", "foo"));
+
+        print(codeCache2(o2, dataCache2, "foo", 42));
+
+        print(codeCache0 === initState);
+        print(codeCache1 === initState);
+        */
     })();
 } catch (e) {
+    if (e instanceof TypeError && 
+        ((e.toString().match(/Cannot read property '.*' of null/) !== null) ||
+         (e.toString().match(/Cannot read property '.*' of undefined/) !== null))) {
+        print(new Error("Invalid null or undefined receiver"));
+    }
     print(e.stack);
 }
