@@ -17,7 +17,7 @@ try {
     var t = 0; 
     var y;
 
-    var o = root.object.createWithMap(new objPayload0(1,2), objPayload0.map);
+    var o = root.object.createWithPayloadAndMap(new objPayload0(1,2), objPayload0.map);
 
     for (var i = 0; i < 200*scale; ++i) {
         t += codeCache0(o, dataCache0, "foo"); 

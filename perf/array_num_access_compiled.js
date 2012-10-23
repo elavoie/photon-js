@@ -10,7 +10,7 @@ try {
     var t = 0; 
     var scale = 200000;
 
-    var a = root.array.create([1,2,3,4,5,6,7,8,9,10]);
+    var a = new ArrayProxy([1,2,3,4,5,6,7,8,9,10]);
 
     for (var i = 0; i < 200*scale; ++i) {
         for (var j = 0; j < codeCache0(a, dataCache0, "length"); ++j) {

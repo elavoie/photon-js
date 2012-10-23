@@ -53,63 +53,129 @@ function getMap(map, props) {
     return current;
 }
 
-function Proxy(proto, payload, map) {
-    this.prototype = proto;
+function Proxy(payload) {
     this.payload = payload;
-    this.map    = map;
-    this.newMap = null;
+    this.map     = Proxy.prototype.newMap;
+    this.newMap  = null;
 }
-Proxy.prototype = {
-    create:function (o) {
+function ProxyCreateWithPayload(payload) {
+    return new this.createCtor(payload);
+}
+
+root.object = {
+    __proto__:null,
+    payload:{__proto__:null},
+    map:new ProxyMap(),
+    newMap:null,
+    createCtor:null,
+
+    call:function () {
+        throw new Error("Object is not a function");
+    },
+    create:(function () {
+        function F() {};
+
+        return function () {
+            F.prototype = this.payload;
+            return this.createWithPayload(new F());
+        };
+    })(),
+    createWithPayload:function (payload) {
         if (this.newMap === null) {
             this.newMap = new ProxyMap(); 
-            this.create = root.object.create;
-        } else {
-            throw new Error("Should never be called if this.newMap is not null!");
-        }
-        return new Proxy(this, o, this.newMap);
+
+            this.createCtor = function (payload) {
+                this.payload = payload;
+                this.map     = this.newMap;
+                this.newMap  = null;
+            };
+            this.createCtor.prototype = this;
+        } 
+        return new this.createCtor(payload);
     }, 
+    createWithPayloadAndMap:function (payload, map) {
+        var obj = this.createWithPayload(payload);
+        obj.map = map;
+        return obj;
+    },
     get:function (n) {
         return this.payload[n];
     },
-    getLength:function () {
+    set:function (n, v) {
+        // These checks guarantee the correct return value
+        // when accessing array properties that were never assigned
+        if (n === "__proto__") {
+            throw new Error("Unsupported modification of the __proto__ property");
+        } else if ((typeof n) === "number") {
+            throw new Error("Unsupported assignation of numerical properties");
+        }
+
+        return setProp(this, n, v);
+    },
+    toString:function () {
+        return "[Photon Proxy]";
+    },
+
+    // Optimized methods
+    getLength:function (dataCache) {
         return this.payload.length;
     },
-    set:function (n, v) {
-        return setProp(this, n, v);
-    }
+    getNum:function (dataCache, n) {
+        return this.get(n);
+    },
 };
 
-function LazyProxy(proto, payload, map) {
-    this.prototype = proto;
-    this.payload = payload;
-    this.map    = map;
-    this.newMap = null;
-};
-LazyProxy.prototype = {
-    create:function () { throw new Error("Unsupported child creation from LazyProxy"); },
-    get:function (n) {
-        if (n === "length") return this.getLength();
-        return this.prototype.payload[n];
-    },
-    getLength:function () {
-        return this.payload.length;
-    },
-    set:function (n, v) {
-        this.payload.__proto__ = this.prototype.payload; 
-        this.get = Proxy.prototype.get;
-        this.set = Proxy.prototype.set;
-        return setProp(this, n, v);
+function extendProxy(o, props) {
+    for (var p in props) {
+        o[p] = props[p];
     }
+}
+
+function LazyProxyGet(n) {
+    if (n === "length") return this.getLength();
+    return this.prototype.payload[n];
+}
+function LazyProxySet(n, v) {
+    this.payload.__proto__ = this.__proto__.payload; 
+    this.get = Proxy.prototype.get;
+    this.set = Proxy.prototype.set;
+    return setProp(this, n, v);
 };
 
-function ArrayProxy(proto, payload, map) {
-    this.prototype = proto;
-    this.payload = payload;
-    this.map    = map;
-    this.newMap = null;
-};
+
+function ArrayProxyCreate () { 
+    throw new Error("Unsupported child creation from ArrayProxy"); 
+}
+function ArrayProxyGet(n) {
+    if (n >= 0 && n < this.payload.length) {
+        return this.payload[n];
+    } else if (n === "length") {
+        return this.getLength();
+    } else {
+        if (this.map === root.array.newMap) {
+            return this.__proto__.payload[n];
+        } else {
+            return this.payload[n];
+        }
+    }
+}
 function ArrayProxySet(n, v) {
+    if (n >= 0 && n < this.payload.length || (typeof n) === "number") {
+        return this.payload[n] = v;
+    } else if (n === "length") {
+        return this.payload.length = v;
+    } else if (n === "__proto__") {
+        throw new Error("Unsupported modification of the __proto__ property");
+    } else {
+        if (this !== root.array) {
+            this.payload.__proto__ = this.__proto__.payload;
+            this.get = Proxy.prototype.get;
+            this.set = ArrayProxySetOpt;
+        }
+        return setProp(this, n, v);
+    }
+}
+function ArrayProxySetOpt(n, v) {
     if (n >= 0 && n < this.payload.length || (typeof n) === "number") {
         return this.payload[n] = v;
     } else if (n === "length") {
@@ -121,43 +187,25 @@ function ArrayProxySet(n, v) {
     }
 
 }
-ArrayProxy.prototype = {
-    create:function () { throw new Error("Unsupported child creation from ArrayProxy"); },
-    get:function (n) {
-        if (n >= 0 && n < this.payload.length) {
+
+
+function FunctionProxyGet(n) {
+    if (n === "length") {
+        return this.getLength();
+    } else if (n === "prototype") {
+        return this.set("prototype", root.object.createEmptyObject());
+    } else {
+        if (this === root.function) {
             return this.payload[n];
-        } else if (n === "length") {
-            return this.getLength();
         } else {
-            return this.prototype.payload[n];
-        }
-    },
-    getLength:function () {
-        return this.payload.length;
-    },
-    set:function (n, v) {
-        if (n >= 0 && n < this.payload.length || (typeof n) === "number") {
-            return this.payload[n] = v;
-        } else if (n === "length") {
-            return this.payload.length = v;
-        } else if (n === "__proto__") {
-            throw new Error("Unsupported modification of the __proto__ property");
-        } else {
-            this.payload.__proto__ = this.prototype.payload;
-            this.get = Proxy.prototype.get;
-            this.set = ArrayProxySet;
-            return setProp(this, n, v);
+            return this.__proto__.payload[n];
         }
     }
-};
-
-function FunctionProxy(proto, payload, map) {
-    this.prototype = proto;
-    this.payload = payload;
-    this.map    = map;
-    this.newMap = null;
 }
-function FunctionProxyGet(n) {
+function FunctionProxyGetLength() {
+    return this.payload.length - 2;
+}
+function FunctionProxyGetOpt(n) {
     if (n === "length") {
         return this.payload.length - 2; 
     } else {
@@ -165,35 +213,55 @@ function FunctionProxyGet(n) {
     }
 }
 function FunctionProxySet(n, v) {
+    if (this !== root.function) {
+        this.payload.__proto__ = this.__proto__.payload; 
+        this.get = FunctionProxyGetOpt;
+        this.set = FunctionProxySetOpt;
+    }
+    if (n !== "length")
+        return setProp(this, n, v);
+    else
+        // Length of a function is immutable
+        return  v;
+}
+function FunctionProxySetOpt(n, v) {
     if (n !== "length")
         return setProp(this, n, v);
     else
         return this.payload.length = v;
 }
-FunctionProxy.prototype = {
-    create:function () { throw new Error("Unsupported child creation from FunctionProxy"); },
-    get:function (n) {
-        if (n === "length") {
-            return this.getLength();
-        } else if (n === "prototype") {
-            return this.set("prototype", root.object.createEmptyObject());
-        } else {
-            return this.prototype.payload[n];
-        }
+function FunctionProxyCreate() { 
+    throw new Error("Unsupported child creation from FunctionProxy"); 
+}
+
+
+root.function = root.object.createWithPayload(function ($this, $closure) {});
+root.function.payload.__proto__ = root.object.payload;
+root.function.map = new ProxyMap();
+
+// To force initialization of newMap and createCtor
+root.function.createWithPayload(function () {});
+
+// For faster array creation
+function FunctionProxy(f) {
+    this.payload = f;
+    this.map     = root.function.newMap;
+    this.newMap  = null;
+}
+FunctionProxy.prototype = root.function;
+
+extendProxy(root.function, {
+    get:FunctionProxyGet,
+    set:FunctionProxySet,
+    
+    call:function (obj) {
+        var args = Array.prototype.slice.call(arguments, 1);
+        return Function.prototype.apply.call(this.payload, null, [obj, this].concat(args));
     },
-    getLength:function () {
-        return this.payload.length - 2;
+    toString:function () {
+        return "[Photon FunctionProxy]";
     },
-    set:function (n, v) {
-        this.payload.__proto__ = this.prototype.payload; 
-        this.get = root.function.get;
-        this.set = FunctionProxySet;
-        if (n !== "length")
-            return setProp(this, n, v);
-        else
-            // Length of a function is immutable
-            return  v;
-    },
+
     call0:function (obj) {
         return this.payload(obj, this);
     },
@@ -212,78 +280,51 @@ FunctionProxy.prototype = {
     call5:function (obj, x0, x1, x2, x3, x4) {
         return this.payload(obj, this, x0, x1, x2, x3, x4);
     }
-};
+});
 
-root.object = new Proxy(
-    null,
-    {__proto__:null},
-    new ProxyMap()    
-);
-
-root.object.newMap = new ProxyMap();
-root.object.create = function (o, map) {
-    return new Proxy(this, o, this.newMap);
-};
-root.object.createWithMap = function (o, map) {
-    return new Proxy(this, o, map);
-};
-root.object.createEmptyObject = (function () {
-   function F() {};
-   F.prototype = root.object.payload;
-
-   return function () {
-        return new Proxy(this, new F(), this.newMap);
-   };
-})();
-root.object.set = function (n, v) {
-    // These checks guarantee the correct return value
-    // when accessing array properties that were never assigned
-    if (n === "__proto__") {
-        throw new Error("Unsupported modification of the __proto__ property");
-    } else if ((typeof n) === "number") {
-        throw new Error("Unsupported assignation of numerical properties");
-    }
-
-    return this.payload[n] = v;
-};
-
-root.function = new FunctionProxy(
-    root.object,
-    function ($this, $closure) {},
-    new ProxyMap()
-);
-root.function.payload.__proto__ = root.object.payload;
-root.function.newMap = new ProxyMap();
-
-root.function.get = FunctionProxyGet;
-root.function.set = Proxy.prototype.set;
-root.function.create = function (f) {
-    return new FunctionProxy(this, f, this.newMap);
-};
-
-
-root.array = new Proxy(
-    root.object,
-    [],
-    new ProxyMap()
-);
+root.array = root.object.createWithPayload([]);
 root.array.payload.__proto__ = root.object.payload;
-root.array.newMap = new ProxyMap();
+root.array.map = new ProxyMap();
 
-root.array.create = function (a) {
-    return new ArrayProxy(this, a, this.newMap);
-};
-root.array.get = Proxy.prototype.get;
-root.array.set = function (n, v) {
-    // These checks guarantee the correct return value
-    // when accessing array properties that were never assigned
-    if (n === "__proto__") {
-        throw new Error("Unsupported modification of the __proto__ property");
-    } else if ((typeof n) === "number") {
-        throw new Error("Unsupported assignation of numerical properties");
+// To force initialization of newMap and createCtor
+root.array.createWithPayload([]);
+
+// For faster array creation
+function ArrayProxy(a) {
+    this.payload = a;
+    this.map     = root.array.newMap;
+    this.newMap  = null;
+}
+ArrayProxy.prototype = root.array;
+
+
+/*
+    set:function (n, v) {
+        if (this === root.array) {
+            // These checks guarantee the correct return value
+            // when accessing array properties that were never assigned
+            if (n === "__proto__") {
+                throw new Error("Unsupported modification of the __proto__ property");
+            } else if ((typeof n) === "number") {
+                throw new Error("Unsupported assignation of numerical properties");
+            }
+        }
+        throw new Error("Unimplemented Array set operation");
+        //return this.payload[n] = v;
     }
-    return this.payload[n] = v;
-};
+*/
+extendProxy(root.array, {
+    get:ArrayProxyGet,
+    set:ArrayProxySet,
+
+    // Optimized methods
+    getNum:function (dataCache, n) {
+        if (n >= 0 && n < this.payload.length)
+            return this.payload[n];
+        else 
+            return this.get(n);
+    },
+});
 
 function extend(obj, props) {
     for (var p in props) {
@@ -294,14 +335,14 @@ function extend(obj, props) {
 }
 
 function clos(f, memoizeFn) {
-    var obj = root.function.create(f);
+    var obj = root.function.createWithPayload(f);
     if (memoizeFn !== undefined)
         obj.set("__memoize__", memoizeFn);
     return obj;
 }
 
 function arr(a) {
-    return root.array.create(a);
+    return new ArrayProxy(a);
 }
 
 function hasProp(obj, name) {
@@ -338,36 +379,45 @@ extend(root.object, {
         return $this.get(name);
     }, (function () {
         var getLength = clos(new Function("$this", "dataCache", "name",
-            "if ($this.map === dataCache[3]) return $this.getLength();\n" +
-            "return bailout($this, dataCache, name);"
+            "return $this.getLength(dataCache);"
         ));
 
         var names = {};
+
         function getName(name) {
             if (!hasProp(names, name)) {
-                names[name] = clos(new Function ("$this", "dataCache", "name", 
-                    "if ($this.map === dataCache[3]) return $this.payload."+name+";\n" +
-                    "return bailout($this, dataCache, name);"
+                names[name] = clos(new Function ("$this", "dataCache", "name",
+                "    return $this.get_"+name+"(dataCache);"
                 ));
+                
+                var f = function (dataCache) {
+                    return this.get(name);
+                };
+                root.array["get_"+name] = f;
+                root.function["get_"+name] = f;
+                root.object["get_"+name] = new Function("dataCache",
+                "    return this.payload."+name+";"
+                );
             }
             return names[name];
         }
 
         var get = clos(new Function ("$this", "dataCache", "name",
-            "if ($this.map === dataCache[3]) return $this.get(name);\n" +
-            "return bailout($this, dataCache, name);"
+            "return $this.get(name);"
         ));
         
         return clos(function ($this, $closure, rcv, method, args, dataCache) {
             var name = args.get(0);
-            print("Caching __get__ " + name + " at " + dataCache.get(0));
             if (dataCache.get(2)[1] === "string") {
                 if (name === "length") {
+                    print("Caching __get__ length at " + dataCache.get(0));
                     return getLength;
                 } else {
+                    print("Caching __get__ " + name + " at " + dataCache.get(0));
                     return getName(args.get(0));
                 }
             } else {
+                print("Caching __get__ at " + dataCache.get(0));
                 return get;
             }
         });
@@ -400,8 +450,7 @@ extend(root.object, {
         }
 
         var set = clos(new Function ("$this", "dataCache", "name", "value",
-            "if ($this.map === dataCache[3]) return $this.set(name, value);\n" +
-            "return bailout($this, dataCache, name, value);"
+            "return $this.set(name, value);"
         ));
         
         return clos(function ($this, $closure, rcv, method, args, dataCache) {
@@ -412,13 +461,15 @@ extend(root.object, {
             // use the optimized version otherwise use the regular version
             if (/*!tracker.hasCacheLinkForMsg(name) &&*/ dataCache.get(2)[1] === "string") {
                 //setPropTracker.addCacheLink(name, cacheId, dataCache);
+                print("Caching __set__ " + name);
                 return setName(name);
             } else { 
                 // Note: This version is monotonic on a per cache basis: 
                 // once a property has been identified  method-like,
                 // unless something flushes the cache, the optimized version
                 // will never be used again
-                return $this;
+                print("Caching __set__");
+                return set;
             }
         });
     })())
@@ -490,12 +541,40 @@ extend(root.function, {
 });
 
 extend(root.array, {
+    __get__:clos(function ($this, $closure, name) {
+        return $this.get(name);
+    }, (function () {
+        var getLength = clos(new Function("$this", "dataCache", "name",
+            "return $this.getLength(dataCache);"
+        ));
+
+        var get = clos(new Function ("$this", "dataCache", "name",
+            "return $this.get(name);"
+        ));
+
+        var getNum = clos(new Function ("$this", "dataCache", "name",
+            "return $this.getNum(dataCache, name);"
+        ));
+        
+        return clos(function ($this, $closure, rcv, method, args, dataCache) {
+            var name = args.get(0);
+            if ((typeof name) === "number") {
+                print("Caching __get__ numerical at " + dataCache.get(0));
+                return getNum;
+            } else if (name === "length" && dataCache.get(2)[1] === "string") {
+                print("Caching __get__ length at " + dataCache.get(0));
+                return getLength;
+            } else {
+                print("Caching __get__ at " + dataCache.get(0));
+                return get;
+            }
+        });
+    })()),
+    /*
     __set__:clos(function ($this, $closure, name, value) {
         if ((typeof name) !== "number") {
             throw new Error("Unsupported non-numerical update on arrays");
-            /*
-            TODO: Handle invalidation of caches
-            */
+            //TODO: Handle invalidation of caches
         }
         return $this.set(name, value);
     }, (function () {
@@ -514,6 +593,7 @@ extend(root.array, {
             }
         });
     })())
+    */
 });
 
 var global      = this;
@@ -562,6 +642,7 @@ var initState;
         if (callFn === defaultCall) {
             var memMethod = send(method, "__memoize__", rcv, method, arr(args), arr(dataCache));
 
+
             if (memMethod !== null) {       
                 var callFn    = memMethod.get("call");
                 if (callFn === defaultCall) {
@@ -569,6 +650,9 @@ var initState;
                     global[dataCacheName][3] = rcv.map;
                     return Function.prototype.apply.call(method.payload, null, [rcv, method].concat(args));
                 }
+                print(memMethod);
+                print(callFn);
+
             } else {
                 if (hasProp(rcv.map.properties, msg)) {
                     // Lookup property before each call    

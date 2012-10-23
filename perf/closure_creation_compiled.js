@@ -11,7 +11,7 @@ try {
 
 
     for (var i = 0; i < 200*scale; ++i) {
-        f = codeCache0(root.function, dataCache0, root.function.create(function ($this, $closure) { return x; }));
+        f = codeCache0(root.function, dataCache0, new FunctionProxy(function ($this, $closure) { return x; }));
         t += 1;
     }
     print(t/scale);

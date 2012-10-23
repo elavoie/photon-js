@@ -10,7 +10,6 @@ var objPayload0 = function (foo, bar, baz) {
 objPayload0.prototype = root.object.payload;
 objPayload0.map = getMap(root.object.newMap, ["foo", "bar", "baz"]);
 
-
 try {
 
 (function () {
@@ -19,7 +18,7 @@ try {
     var y;
 
     for (var i = 0; i < 200*scale; ++i) {
-        y = codeCache0(root.object, dataCache0, root.object.createWithMap(new objPayload0(1,2,3), objPayload0.map));
+        y = codeCache0(root.object, dataCache0, root.object.createWithPayloadAndMap(new objPayload0(1,2,3), objPayload0.map));
         t += 1;
     }
     print(t/scale);

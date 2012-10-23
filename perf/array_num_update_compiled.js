@@ -1,5 +1,5 @@
-dataCache0 = [0, "__set__", ["unknown", "unknown"], null];
-codeCache0 = initState; 
+var dataCache0 = [0, "__set__", ["unknown", "unknown"], null];
+var codeCache0 = initState;
 
 try {
 
@@ -7,7 +7,7 @@ try {
     var t = 0; 
     var scale = 160000;
 
-    var a = root.array.create([1,2,3,4,5,6,7,8,9,10]);
+    var a = new ArrayProxy([1,2,3,4,5,6,7,8,9,10]);
 
     for (var i = 0; i < 200*scale; ++i) {
         for (var j = 0; j < 10; ++j) {
