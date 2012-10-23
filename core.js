@@ -354,7 +354,7 @@ function initState(rcv, cacheData) {
 
         tracker.addCacheLink(method, "__memoize__", codeCacheName, cacheData);
 
-        if (false && rcv === root_global) {
+        if (rcv === root_global) {
             if (verbose) print("-- caching global function call " + msg + " at " + codeCacheName);
             global[codeCacheName] = memoizedMethod.payload.code;
             global[dataCacheName] = memoizedMethod;

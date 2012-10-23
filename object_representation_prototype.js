@@ -14,23 +14,43 @@ function send(obj, msg) {
 root.object   = {
     __proto__:wrapper,
     payload:{__proto__:null}, 
-    prototype:null
+    prototype:null,
+    flags:0,
 };
 root.function = {
     __proto__:wrapper,
     payload:function () {},
-    prototype:root.object
+    prototype:root.object,
+    flags:0
 };
 root.function.payload.__proto__ = root.object.payload;
+root.array = {
+    __proto__:wrapper,
+    payload:[],
+    prototype:root.object,
+    flags:0,
+    "new":function (a) {
+        return new Wrapper(root.array, a, 1);
+    }
+};
+root.array.payload.__proto__ = root.object.payload;
+root.array.new.prototype = root.array.payload;
+
+function Wrapper(proto, payload, flags) {
+    this.prototype = proto;
+    this.payload = payload;
+    this.flags = flags;
+}
+Wrapper.prototype = wrapper;
 
 function obj(proto, payload) {
     if (proto !== null) 
-        payload["__proto__"] = proto.payload;
+        payload.__proto__ = proto.payload;
 
+    //return new Wrapper(proto, payload); 
     return {
-        __proto__:wrapper,
         prototype:proto,
-        payload:payload        
+        payload:payload
     };
 }
 
@@ -250,6 +270,9 @@ extend(root.object, {
         var name = args[0];
         if (dataCache[2][1] === "string") {
             return clos(new Function ("$this", "$closure", "name", 
+                //"if (root.object.payload.__get__ !== $this.payload.__get__) bailout();" +
+                "if ($this.payload.__get__ !== root.object.__get__) bailout();\n" +
+                "throw new Error('test');\n" +
                 "return $this.payload."+name+";"
             ));
         } else {
@@ -277,6 +300,7 @@ extend(root.object, {
         if (!tracker.hasCacheLinkForMsg(name) && dataCache[2][1] === "string") {
             setPropTracker.addCacheLink(name, cacheId, dataCache);
             return clos(new Function ("$this", "$closure", "name", "value", 
+                "if (root.object.payload.__set__ !== $this.payload.__set__) bailout();" +
                 "return $this.payload."+name+" = value;"
             ));
         } else { 
@@ -298,20 +322,18 @@ extend(root.function, {
     })
 });
 
+extend(root.array, {
+    "__new__":function ($this, $closure, obj) {
+        return obj;
+    }
+});
+
 } catch (e) {
     print(e.stack);
     throw e;
 }
 
 var global = this;
-var o  = obj(root.object, {
-    foo:1,
-    ident:clos(function ($this, $closure, n) {
-        return n;
-    })
-});
-var o2 = obj(o, {bar:2});
-
 function initState(obj, dataCache) {
     var verbose = true;
     var args = Array.prototype.slice.call(arguments, 2);
@@ -338,43 +360,80 @@ function initState(obj, dataCache) {
     return Function.prototype.apply.call(m.payload, null, [obj, m].concat(args));
 }
 
-var codeCache0 = initState;
+var codeCache0 = null;
 var dataCache0 = [0, "__set__", ["unknown", "string", "number"]];
 var codeCache1 = initState;
 var dataCache1 = [1, "foo",     ["unknown"]];
 var codeCache2 = initState;
 var dataCache2 = [2, "__set__", ["unknown", "string", "number"]];
 
-codeCache0 = function ($this, $closure, name, value) {
-    return $this.payload.foo = value;
+function bailout() {
+    throw new Error("BAILOUT!!!");
 }
+
+var o  = obj(root.object, {
+    foo:1,
+    ident:clos(function ($this, $closure, n) {
+        return n;
+    })
+});
+var o2 = obj(o, {bar:2});
+
+
+(function () {
+    codeCache0 = function ($this, $closure, name) {
+        var m = $this.payload.__get__;
+        return m.payload($this, m, name);
+    };
+    /*
+    codeCache0 = new Function("$this", "$closure", "name", "value",
+        "var m = $this.payload.__set__;" + 
+        "return m.payload($this, m, name, value);"
+    );
+    */
+})();
+
+
+(function () {
+    dataCache0.push(root.object.payload.__get__);
+    /*
+    codeCache0 = function ($this, dataCache, name) {
+        if ($this.payload.__get__ !== dataCache[3]) bailout();
+        return $this.payload.foo;
+    };
+    */
+    codeCache0 = new Function("$this", "dataCache", "name",
+        "if ($this.payload.__get__ !== dataCache[3]) bailout();" + 
+        "return $this.payload.foo;"
+    );
+})();
+
+/*
+var a = obj(root.array, [1,2,3,4,5,6,7,8,9,10]);
+dataCache0.push(root.array.payload.__new__);
+codeCache0 = function ($this, dataCache, obj) {
+    return obj;
+};
+*/
+
+var x0 = {foo:1, ident:42};
+
+var F = function () {
+    this.bar = 2;
+}
+F.prototype = x0;
+var x1 = new F();
 
 try { 
     (function () {
         var t = 0; 
         var scale = 5000000;
         for (var i = 0; i < 200*scale; ++i) {
-            t += codeCache0(o2, dataCache0, "foo", 1);
-            //t += (o2.payload.foo = 1);
-            /*
-            o2.payload.foo = 1;
-            t += o2.payload.foo;
-            */
-            //t += send(o2, "__get__", "foo");  
+            //t += codeCache0(o, dataCache0, "foo");
+            t += x0.foo;
         }
         print(t/scale);
 
-        /*
-        send(o2, "__set__", "foo", clos(function () { return 1; }));
-        print(codeCache1(o2, dataCache1));
-        //print(send(o2, "__get__", "foo"));
-        //print(send(o,  "__get__", "foo"));
-
-        print(codeCache2(o2, dataCache2, "foo", 42));
-
-        print(codeCache0 === initState);
-        print(codeCache1 === initState);
-        */
     })();
 } catch (e) {
     if (e instanceof TypeError && 
