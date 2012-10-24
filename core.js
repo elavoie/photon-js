@@ -1611,7 +1611,7 @@ try
         "run":bs_clos(function ($this, $closure, s) {
             return run(s);
         }),
-        "gc":bs_clos(function ($this, $closure, s) {
+        "gc":bs_clos(function ($this, $closure) {
             gc();
         }),
         "eval":function (s) {

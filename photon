@@ -1,7 +1,7 @@
-d8 ../photon/source/deps/ometa-js/lib.js                     \
+../v8/d8 ../photon/source/deps/ometa-js/lib.js                     \
    ../photon/source/deps/ometa-js/ometa-base.js              \
    ../photon/source/deps/ometa-js/parser.js                  \
    core.js \
    ometa/compiler.js \
    lib.js \
-   photon.js --expose_gc -- $@
+   photon.js --expose_gc --gc_interval=1 -- $@
