@@ -3,6 +3,7 @@
     var t = 0;
     var f = function (n) { if (n>0) return n; else return -n; };
     var o = {foo:f};
+    var o2 = Object.create(o);
 
     for (var i = 0; i < 200*scale; ++i) {
         t += o.foo(-1);

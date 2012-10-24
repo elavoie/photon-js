@@ -1,14 +1,14 @@
 (function () {
-    var scale = 360000;
+    var scale = 400000;
     var t = 0;
     var y;
 
-    var F = function () { };
+    var F = function (bar) { this.bar = bar; };
     F.prototype.foo = 1;
 
     for (var i = 0; i < 200*scale; ++i) {
-        y = new F();
-        t += 1;
+        y = new F(1);
+        t += y.bar + y.foo;
     }
 
     print(t/scale);

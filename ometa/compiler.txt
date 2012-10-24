@@ -71,7 +71,8 @@ ometa PhotonASTTraversal {
   precode  :s trans:x,
   igetp    trans:x trans:fd,
   letLambda :args [trans*:values] trans:body,
-  icSend   :nb :msg trans:recv trans*:args
+  icSend   :nb :msg trans:recv trans*:args,
+  wrapExpr :pre :post trans:e
 }
 
 ometa PhotonASTCopy {
@@ -140,7 +141,8 @@ ometa PhotonASTCopy {
   precode  :s trans:x                           -> [#precode, s, x],
   igetp    trans:x trans:fd                     -> [#igetp, x, fd],
   letLambda :args [trans*:values] trans:body    -> [#letLambda, args, [values], body],
-  icSend   :nb :msg trans:recv trans*:args      -> [#icSend, nb, msg, recv].concat(args)
+  icSend   :nb :msg trans:recv trans*:args      -> [#icSend, nb, msg, recv].concat(args),
+  wrapExpr :pre :post trans:e                   -> [#wrapExpr, pre, post, e]
 }
 
 ometa PhotonPrettyPrinter 
@@ -553,6 +555,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
   var      :name {self.context.declare(name)}
                  ( [#get #undefined]                          -> [#begin]
                  | trans:val                                  -> [#set, [#get, name], val]),
+  /*
   arr      trans*:xs                                          -> {var a = gensym(); 
                                                                   [#let, _new_context(), 
                                                                     [#begin, 
@@ -561,6 +564,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                     .concat(xs.map(function (x) {
                                                                      return [#send, "push", [#get, a], x];}))
                                                                     .concat([[#get, a]])]},
+  */
   unop     ( 'typeof' [#get 'window']                         -> [#string, "undefined"] 
            | 'typeof' trans:x                                 -> [#send, "__typeof__",  x]
            | 'delete' ( [#getp trans:x trans:f]               -> [#send, "__delete__",  x, f]
@@ -643,6 +647,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                                 .concat([[#send, "next", [#get, it]]])],
                                                                         [#get, "undefined"]]]},
   new      trans:fn trans*:args                               -> [#send, "__ctor__", fn].concat(args),
+  /*
   json     trans*:props                                       -> {var o = gensym();
                                                                   [#let, _new_context(), 
                                                                     [#begin, [#var, o, [#send, "__new__", [#ref, "root.object"]]]],
@@ -653,6 +658,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                                     b[1],
                                                                                     b[2]];}))
                                                                     .concat([[#get, o]]))]},
+  */
   call     = [#getp [#super trans:rcv] ( [#string :msg] 
                                        | { error("Super send need a static message name"); } ) ] 
              trans*:args                                      -> [#super_send, msg, rcv].concat(args)
@@ -791,9 +797,12 @@ ometa PhotonVarScopeBinding <: PhotonASTCopy {
   get       (#true | #false | #undefined | #null | ?{self.context.is_local_scope()} #arguments):c -> [#get, c],
   get (:id -> {var x = self.context.scope.lookup(id); if (x === undefined) throw "Undefined variable '" + id + "'"; x}):x 
                                        ( isGlobal(x)             -> [#send, "__get__", [#ref, "root_global"], [#string, id]]
+                                       | empty                   -> [#get, id]
+                                       /*
                                        | isLocal(x)              -> [#get, id]
                                        | isEscaping(x)           -> [#getCell, id]
-                                       | isCaptured(x)           -> [#closureRefValue, [#closure], [#number, self.context.closure_offsets[id]]]),
+                                       | isCaptured(x)           -> [#closureRefValue, [#closure], [#number, self.context.closure_offsets[id]]]
+                                       */),
 
   call ( [#get :id] ({self.context.scope.lookup(id);}):x ?{x.is_global()} 
          trans*:args                                             -> [#send, id, [#ref, "root_global"]].concat(args)
@@ -803,14 +812,16 @@ ometa PhotonVarScopeBinding <: PhotonASTCopy {
             isGlobal(x) trans:val                                -> [#send, "__set__", [#ref, "root_global"], [#string, id], val]
             | ^set),
   func      :args :ctxt 
-            {self.context.enter_function_scope(ctxt.scope); ctxt.scope.escaping()}:es
-            {ctxt.scope.captured()}:cs
-            {self.context.closure_offsets}:os
+            {self.context.enter_function_scope(ctxt.scope);} // ctxt.scope.escaping()}:es
+            //{ctxt.scope.captured()}:cs
+            //{self.context.closure_offsets}:os
             trans:body
-            {self.context.leave_function_scope();}               -> { body = [#begin]
+            {self.context.leave_function_scope();}               -> { 
+                                                                      /*
+                                                                      body = [#begin]
                                                                              .concat([body[1]])
-                                                                             .concat(self.context.gen_escaping(es))
-                                                                             .concat(self.context.gen_arguments(args.length, ctxt.scope))
+                                                                             //.concat(self.context.gen_escaping(es))
+                                                                             //.concat(self.context.gen_arguments(args.length, ctxt.scope))
                                                                              .concat(body.slice(2));
 
                                                                       var capturing = false; 
@@ -830,6 +841,8 @@ ometa PhotonVarScopeBinding <: PhotonASTCopy {
                                                                           var fun = [#func, args, ctxt, body];
                                                                       }
                                                                       fun;
+                                                                      */
+                                                                      [#func, args, ctxt, body];
                                                                      },
   try :ctxt trans:x :name 
             {self.context.enter_let_scope(ctxt.scope)} 
@@ -1017,22 +1030,56 @@ ometa PhotonICConv <: PhotonASTCopy {
   send     :msg?(msg === "__$call__" || msg === "__$apply__") trans:recv trans*:args 
                                        -> [#send, msg, recv].concat(args),
   send     :msg 
-           trans:recv trans*:args      -> {var nb = PhotonICConv.ic_count++;
+           trans:recv trans*:args      -> {var nb = PhotonICConv.icCount++;
+                                           var argTypes = [recv[0].toProgramString()].concat(args.map(function (x) { return x[0].toProgramString(); }));
                                            this.global_scope.push([#set, [#get, "codeCache"+nb], [#code, "initState"]], 
-                                                                  [#set, [#get, "dataCache"+nb], [#code, "["+nb+","+msg.toProgramString()+"]"]]);
+                                                                  [#set, [#get, "dataCache"+nb], [#code, "["+nb+","+msg.toProgramString()+",["+argTypes.join(",")+"]]"]]);
                                            [#icSend, nb, msg, recv].concat(args)},
-  call     trans:fn trans*:args        -> {var nb = PhotonICConv.ic_count++; var msg = "call";
+  call     trans:fn trans*:args        -> {var nb = PhotonICConv.icCount++; var msg = "call";
                                            this.global_scope.push([#set, [#get, "codeCache"+nb], [#code, "initState"]], 
-                                                                  [#set, [#get, "dataCache"+nb], [#code, "["+nb+","+msg.toProgramString()+"]"]]);
-                                           [#icSend, nb, msg, fn].concat(args)},
-  global :ctxt trans:r                 -> [#global, ctxt, [#begin, [#begin].concat(this.global_scope), r]]
- }
+                                                                  [#set, [#get, "dataCache"+nb], [#code, "["+nb+","+msg.toProgramString()+",[]]"]]);
+                                           [#icSend, nb, msg, fn, [#ref, "root_global"]].concat(args)},
+  func     :args :ctxt trans:body      -> {var nb = PhotonICConv.icCount++; var msg = "__new__";
+                                           this.global_scope.push([#set, [#get, "codeCache"+nb], [#code, "initState"]], 
+                                                                  [#set, [#get, "dataCache"+nb], [#code, "["+nb+","+msg.toProgramString()+",[]]"]]);
+                                           [#icSend, nb, msg, [#ref, "root.function"], [#func, args, ctxt, body]]},  
+  json   trans*:props                  -> {var objPayloadName = "objPayload" + PhotonICConv.objPayloadCount++;
+                                           var nb = PhotonICConv.icCount++; 
+                                           var propNames  = props.map(function (b) { return b[1]; });
+                                           var propValues = props.map(function (b) { return b[2]; }); 
+
+                                           var args = [];
+                                           var stmts = [];
+                                           var propNamesStr = [];
+                                           for (var i = 0; i < propNames.length; ++i) {
+                                               args.push("x" + i);
+                                               var str = propNames[i][1].toProgramString();
+                                               stmts.push("    this["+str+ "] = x" + i)
+                                               propNamesStr.push(str);
+                                           }
+                                           var fn = "function (" + args.join(",") + ") {\n" + stmts.join(";\n") + ";\n}";
+                                           var objCreatePre  = "root.object.createWithPayloadAndMap(new " + objPayloadName;
+                                           var objCreatePost = ", " + objPayloadName + ".map)";
+
+                                           this.global_scope.push([#set, [#get, objPayloadName], [#code, fn]], 
+                                                                  [#set, [#code, objPayloadName+".prototype"], [#code, "root.object.payload"]],
+                                                                  [#set, [#code, objPayloadName+".map"], [#code, "getMap(root.object.newMap, [" + propNamesStr.join(",") + "])"]],
+                                                                  [#set, [#get, "codeCache"+nb], [#code, "initState"]], 
+                                                                  [#set, [#get, "dataCache"+nb], [#code, "["+nb+", "+"__new__".toProgramString()+",[]]"]]);
+                                           [#icSend, nb, "__new__", [#ref, "root.object"], [#wrapExpr, objCreatePre, objCreatePost, [#exprSeq].concat(propValues)]];},
+  arr      trans*:xs                    -> {var nb = PhotonICConv.icCount++; var msg = "__new__";
+                                           this.global_scope.push([#set, [#get, "codeCache"+nb], [#code, "initState"]], 
+                                                                  [#set, [#get, "dataCache"+nb], [#code, "["+nb+","+msg.toProgramString()+",[]]"]]);
+                                           [#icSend, nb, msg, [#ref, "root.array"], [#wrapExpr, "(new ArrayProxy(", "))", [#arr].concat(xs)]]},
+  global :ctxt trans:r                  -> [#global, ctxt, [#begin, [#begin].concat(this.global_scope), r]]
+}
 
 PhotonICConv.initialize = function () {
     this.global_scope = [];
 }
 
-PhotonICConv.ic_count = 0;
+PhotonICConv.icCount = 0;
+PhotonICConv.objPayloadCount = 0;
 
 
 ometa PhotonJSCodeGen {
@@ -1079,7 +1126,7 @@ ometa PhotonJSCodeGen {
   doWhile  block:body trans:cond                                   -> ("do \n" +  body +  "while (" +  cond +  ")"),
   for      exprList:init trans:cond exprList:upd block:body        -> ("for (" +  init +  "; " +  cond +  "; " +  upd +  ")\n" +  body),
   begin    flat:stmts                                              -> stmts,
-  func     :args :ctxt block:body                                  -> ("clos(function (" + ["$this", "$closure"].concat(args).join(",") +  ")\n" + body + "," + ((ctxt.name !== undefined) ? ctxt.name.toProgramString() : "undefined") + ")"),
+  func     :args :ctxt block:body                                  -> ("(new FunctionProxy(function (" + ["$this", "$closure"].concat(args).join(",") +  ")\n" + body + "))"),
   call     trans:fn trans*:args                                    -> { var n = gensym();
                                                                         ("(function ("+n+") {" + "return send(" + [n, '"call"', "root_global"].concat(args).join(", ") +  ");})(" + fn + ")")},
   send     #__$call__  trans:recv trans*:args                      -> {var syms = args.map(function (x) { return gensym(); }); 
@@ -1096,6 +1143,7 @@ ometa PhotonJSCodeGen {
   case     trans:x inc block:y dec                                 -> (self.ilvl() + "case " + x + ":\n" + y),
   default          inc block:y dec                                 -> (self.ilvl() + "default:\n" +  y),
   exprSeq  trans*:es                                               -> ("(" + es.join(", ") + ")"),
+  arr      trans*:xs                                               -> ("([" + xs.join(",") + "])"),
 
   ref      :s                                                      -> s,
   code     :c                                                      -> c,
@@ -1105,7 +1153,8 @@ ometa PhotonJSCodeGen {
   arguments_length                                                 -> ("(arguments.length - 2)"),
   arguments trans:i                                                -> ("(arguments[" + i + "+2])"),
   arguments_slice trans:i                                          -> ("arr(Array.prototype.slice.call(arguments, " + i + "+2))"),
-  igetp    trans:x trans:fd                                        -> ("(" + x + "[" + fd + "])")
+  igetp    trans:x trans:fd                                        -> ("(" + x + "[" + fd + "])"),
+  wrapExpr :pre :post trans:e                                      -> ("(" + pre + e + post + ")")
 }
 
 PhotonJSCodeGen.initialize = function () {

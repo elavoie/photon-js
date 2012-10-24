@@ -1,10 +1,12 @@
 
+# core.js \
+
 FILES = \
    ../photon/source/deps/ometa-js/lib.js \
    ../photon/source/deps/ometa-js/ometa-base.js \
    ../photon/source/deps/ometa-js/parser.js \
-   core.js \
    ometa/compiler.js \
+   perf/obj.js \
    lib.js \
    photon.js
  

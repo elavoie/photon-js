@@ -1,3 +1,9 @@
+var options = {
+    verbose:false,
+    use_ic:false,
+    trace_ic:false,
+    trace_ic_tracker:false
+}
 var root = {};
 
 function send(obj, msg) {
@@ -7,7 +13,7 @@ function send(obj, msg) {
     if (!m instanceof FunctionProxy) {
         throw new Error("Invalid message " + msg);
     }
-    return Function.prototype.apply.call(m.payload, null, [obj, m].concat(args));
+    return m.call.apply(m, [obj].concat(args));
 }
 
 function ProxyMap() {
@@ -54,9 +60,7 @@ function getMap(map, props) {
 }
 
 function Proxy(payload) {
-    this.payload = payload;
-    this.map     = Proxy.prototype.newMap;
-    this.newMap  = null;
+    throw new Error("Proxy should not be called directly");
 }
 function ProxyCreateWithPayload(payload) {
     return new this.createCtor(payload);
@@ -83,6 +87,12 @@ root.object = {
     createWithPayload:function (payload) {
         if (this.newMap === null) {
             this.newMap = new ProxyMap(); 
+
+            if (this !== root.object && 
+                !(this instanceof FunctionProxy) && 
+                !(this instanceof ArrayProxy)) {
+                this.createWithPayload = ProxyCreateWithPayload;
+            }
 
             this.createCtor = function (payload) {
                 this.payload = payload;
@@ -124,6 +134,7 @@ root.object = {
         return this.get(n);
     },
 };
+Proxy.prototype = root.object;
 
 function extendProxy(o, props) {
     for (var p in props) {
@@ -193,7 +204,7 @@ function FunctionProxyGet(n) {
     if (n === "length") {
         return this.getLength();
     } else if (n === "prototype") {
-        return this.set("prototype", root.object.createEmptyObject());
+        return this.set("prototype", root.object.create());
     } else {
         if (this === root.function) {
             return this.payload[n];
@@ -364,15 +375,17 @@ extend(root.object, {
     __new__:clos(function ($this, $closure, obj) {
         return obj;
     }, (function () {
+        /*
         // Ensure the f function is not considered a closure by V8
         // to allow inlining
         var f =  clos(new Function("$this", "dataCache", "obj",
             "if (dataCache[3] === $this.map) return obj;\n" + 
             "return bailout($this, dataCache, obj);"
         ));
+        */
         return clos(function ($this, $closure, rcv, method, args, dataCache) {
-            print("Cached root.object.__new__"); 
-            return f;
+            if (options.verbose) print("Cached root.object.__new__"); 
+            return $this;
         });
     })()),
     __get__:clos(function ($this, $closure, name) {
@@ -410,14 +423,14 @@ extend(root.object, {
             var name = args.get(0);
             if (dataCache.get(2)[1] === "string") {
                 if (name === "length") {
-                    print("Caching __get__ length at " + dataCache.get(0));
+                    if (options.verbose) print("Caching __get__ length at " + dataCache.get(0));
                     return getLength;
                 } else {
-                    print("Caching __get__ " + name + " at " + dataCache.get(0));
+                    if (options.verbose) print("Caching __get__ " + name + " at " + dataCache.get(0));
                     return getName(args.get(0));
                 }
             } else {
-                print("Caching __get__ at " + dataCache.get(0));
+                if (options.verbose) print("Caching __get__ at " + dataCache.get(0));
                 return get;
             }
         });
@@ -442,8 +455,11 @@ extend(root.object, {
         function setName(name) {
             if (!hasProp(names, name)) {
                 names[name] = clos(new Function ("$this", "dataCache", "name", "value",
+                    "return $this.set(name, value);"
+                    /*
                     "if ($this.map === dataCache[3]) return $this.payload."+name+" = value;\n" +
                     "return bailout($this, dataCache, name);"
+                    */
                 ));
             }
             return names[name];
@@ -461,14 +477,14 @@ extend(root.object, {
             // use the optimized version otherwise use the regular version
             if (/*!tracker.hasCacheLinkForMsg(name) &&*/ dataCache.get(2)[1] === "string") {
                 //setPropTracker.addCacheLink(name, cacheId, dataCache);
-                print("Caching __set__ " + name);
+                if (options.verbose) print("Caching __set__ " + name);
                 return setName(name);
             } else { 
                 // Note: This version is monotonic on a per cache basis: 
                 // once a property has been identified  method-like,
                 // unless something flushes the cache, the optimized version
                 // will never be used again
-                print("Caching __set__");
+                if (options.verbose) print("Caching __set__");
                 return set;
             }
         });
@@ -478,10 +494,37 @@ extend(root.object, {
 extend(root.function, {
     "__ctor__":(function () {
         function F() {};
-        var ctor = clos(new Function ("$this", "dataCache", 
-            "if ($this.map === dataCache[3]) {\n" +
-            "    var obj = dataCache[5].create(new dataCache[4]);\n" +
-            "    var r   = $this.payload(obj, $this);\n" +
+        var ctor0 = clos(new Function ("$this", "dataCache",
+            "if ($this === dataCache[6]) {\n" +
+            "    var obj = dataCache[5].createWithPayload(new dataCache[4]);\n" +
+            "    var r   = $this.call0(obj);\n" +
+            "    return ((typeof r) === 'object' && r !== null) ? r : obj;\n" +
+            "}\n" + 
+            "return bailout($this, dataCache);"
+        ));
+
+        var ctor1 = clos(new Function ("$this", "dataCache", "x0", 
+            "if ($this === dataCache[6]) {\n" +
+            "    var obj = dataCache[5].createWithPayload(new dataCache[4]);\n" +
+            "    var r   = $this.call1(obj, x0);\n" +
+            "    return ((typeof r) === 'object' && r !== null) ? r : obj;\n" +
+            "}\n" + 
+            "return bailout($this, dataCache);"
+        ));
+
+        var ctor2 = clos(new Function ("$this", "dataCache", "x0", "x1",
+            "if ($this === dataCache[6]) {\n" +
+            "    var obj = dataCache[5].createWithPayload(new dataCache[4]);\n" +
+            "    var r   = $this.call2(obj, x0, x1);\n" +
+            "    return ((typeof r) === 'object' && r !== null) ? r : obj;\n" +
+            "}\n" + 
+            "return bailout($this, dataCache);"
+        ));
+
+        var ctor3 = clos(new Function ("$this", "dataCache", "x0", "x1", "x2",
+            "if ($this === dataCache[6]) {\n" +
+            "    var obj = dataCache[5].createWithPayload(new dataCache[4]);\n" +
+            "    var r   = $this.call3(obj, x0, x1, x2);\n" +
             "    return ((typeof r) === 'object' && r !== null) ? r : obj;\n" +
             "}\n" + 
             "return bailout($this, dataCache);"
@@ -489,21 +532,25 @@ extend(root.function, {
 
         return clos(function ($this, $closure) {
             var args = Array.prototype.slice.call(arguments, 2);
-            var proto = $this.get("prototype");
-            F.prototype = proto.payload;
-            var obj = proto.create(new F());
-            var r = Function.prototype.apply.call($this.payload, null, [obj, $this].concat(args));
+            var obj = $this.get("prototype").create();
+            var r = $this.call.apply($this, [obj].concat(args));
             return ((typeof r) === "object" && r !== null) ? r : obj;
         }, clos(function ($this, $closure, rcv, method, args, dataCache) {
-            print("Cached __ctor__");    
+            if (options.verbose) print("Cached __ctor__");    
             function F() {}
             dataCache.set(4, F);
             dataCache.set(5, rcv.get("prototype"));
+            dataCache.set(6, rcv);
             F.prototype = rcv.get("prototype").payload;
         
-            if (args.getLength() !== 0) 
-                throw new Error("Unsupported __ctor__ caching for more than 0 arguments");
-            return ctor;
+            switch(args.getLength()) {
+                case 0: return ctor0;
+                case 1: return ctor1;
+                case 2: return ctor2;
+                case 3: return ctor3;
+                default: throw new Error("Unsupported __ctor__ caching for " + args.getLength() + " arguments"); 
+            }
+
         }));
     })(),
     "call":clos(function ($this, $closure, obj) {
@@ -518,15 +565,18 @@ extend(root.function, {
                 for (var i = 0; i < nb; ++i) {
                     args.push("x"+ i); 
                 }
-                var body = "if ($this.map === dataCache[3]) return $this.payload(" + ["obj", "$this"].concat(args).join(",") + ");\n" +
-                           "return bailout($this, " + ["dataCache", "obj"].concat(args).join(",") + ");";
+                var body = "return $this.call" + nb + "(" + ["obj"].concat(args).join(",") + ");"
                 argNbs[nb] = clos(Function.apply(null, ["$this", "dataCache", "obj"].concat(args).concat([body])));
+                
+                // TODO: Dynamically extend both the root object and root function to support
+                //       more arguments
+                if (nb >= 10) throw new Error("Unsupported number of arguments");
             }
             return argNbs[nb];
         };
         
         return clos(function ($this, $closure, rcv, method, args, dataCache) {
-            print("Cached call");
+            if (options.verbose) print("Cached function call");
             var nb = args.getLength();
             nb = (nb === 0) ? 0 : nb-1;
             return argNb(nb);
@@ -559,13 +609,13 @@ extend(root.array, {
         return clos(function ($this, $closure, rcv, method, args, dataCache) {
             var name = args.get(0);
             if ((typeof name) === "number") {
-                print("Caching __get__ numerical at " + dataCache.get(0));
+                if (options.verbose) print("Caching __get__ numerical at " + dataCache.get(0));
                 return getNum;
             } else if (name === "length" && dataCache.get(2)[1] === "string") {
-                print("Caching __get__ length at " + dataCache.get(0));
+                if (options.verbose) print("Caching __get__ length at " + dataCache.get(0));
                 return getLength;
             } else {
-                print("Caching __get__ at " + dataCache.get(0));
+                if (options.verbose) print("Caching __get__ at " + dataCache.get(0));
                 return get;
             }
         });
@@ -604,20 +654,17 @@ var initState;
 (function () {
     var namedMethods = {};
     function memNamedMethod(name, argNb) {
-        if (!hasProp(msgs, name)) {
+        if (!hasProp(namedMethods, name)) {
             namedMethods[name] = []; 
         }
 
         if (namedMethods[name][argNb] === undefined) {
             var args = [];
-            for (var i = 0; i < nb; ++i) {
+            for (var i = 0; i < argNb; ++i) {
                 args.push("x"+ i); 
             }
-            var body = "if ($this.map === dataCache[3]) {\n" +
-                       "    return $this.payload."+name+".call"+argNb+"(" + ["$this"].concat(args).join(",") + ");\n" +
-                       "}\n" +
-                       "return bailout($this, " + ["dataCache"].concat(args).join(",") + ");";
-            namedMethods[name][argNb] = clos(Function.apply(null, ["$this", "dataCache"].concat(args).concat([body])));
+            var body = "    return $this.get(\""+name+"\").call"+argNb+"(" + ["$this"].concat(args).join(",") + ");\n";
+            namedMethods[name][argNb] = Function.apply(null, ["$this", "dataCache"].concat(args).concat([body]));
         }
 
         return namedMethods[name][argNb];
@@ -648,20 +695,16 @@ var initState;
                 if (callFn === defaultCall) {
                     global[codeCacheName]    = memMethod.payload;
                     global[dataCacheName][3] = rcv.map;
-                    return Function.prototype.apply.call(method.payload, null, [rcv, method].concat(args));
+                    return method.call.apply(method, [rcv].concat(args));
                 }
-                print(memMethod);
-                print(callFn);
 
-            } else {
-                if (hasProp(rcv.map.properties, msg)) {
-                    // Lookup property before each call    
-                } else {
-                    // Store method value in cache
-                }
-            }
-
-            throw new Error();
+                throw new Error();
+            } 
+            
+            if (options.verbose) print("Caching generic method call for " + msg);
+            global[codeCacheName]    = memNamedMethod(msg, args.length);
+            global[dataCacheName][3] = rcv.map;
+            return method.call.apply(method, [rcv].concat(args));
         }
 
         throw new Error();
@@ -669,7 +712,19 @@ var initState;
 })();
 
 function bailout($this, dataCache, name) {
-    var m = $this.payload[dataCache[1]]; 
-    return m.payload($this, m, name);
+    throw new Error("BAILOUT!!!");
 }
+
+var root_global = root.object.create();
+root_global.set("print", clos(function ($this, $closure, s) { print(s); }));
+
+var Object_ctor = clos(function () { throw new Error("Unsupported Object constructor"); });
+root_global.set("Object", Object_ctor);
+Object_ctor.set("create", clos(function ($this, $closure, o) { return o.create(); }));
+
+var Math_obj = root.object.create();
+root_global.set("Math", Math_obj);
+Math_obj.set("max", clos(function ($this, $closure, x, y) { return Math.max(x, y); }));
+
+
 

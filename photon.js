@@ -66,6 +66,8 @@ photon.eval = function (s) {
 
 var src = "";
 var files = [];
+options.output_only = false;
+options.output_name = "temp.js";
 
 for (var i = 0; i < arguments.length; ++i)
 {
@@ -79,7 +81,10 @@ for (var i = 0; i < arguments.length; ++i)
         tracker.setVerbosity(true);
     else if (arguments[i] === "-f")
         undefined;
-    else
+    else if (arguments[i] === "-o") {
+        options.output_only = true;
+        options.output_name = arguments[++i];
+    } else
         files.push(arguments[i]);
 }
 
@@ -100,7 +105,7 @@ for (var i = 0; i < files.length; ++i)
     }
 }
 
-if (options.verbose)
-    writeFile("temp.js", src);
-
-eval(src);
+if (options.verbose || options.output_only)
+    writeFile(options.output_name, src);
+if (!options.output_only)
+    eval(src);
