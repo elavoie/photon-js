@@ -18,7 +18,7 @@ function send(obj, msg) {
     var m = obj.get(msg);
 
     if (!(m instanceof FunctionProxy)) {
-        throw new Error("Invalid message " + msg);
+        throw new Error("Invalid message " + msg + " for " + obj);
     }
     return m.call.apply(m, [obj].concat(args));
 }
@@ -310,6 +310,7 @@ extendProxy(root.function, {
         return Function.prototype.toString.call(this.payload);
     },
 
+    /*
     call0:function (obj) {
         return this.payload(obj, this);
     },
@@ -328,6 +329,7 @@ extendProxy(root.function, {
     call5:function (obj, x0, x1, x2, x3, x4) {
         return this.payload(obj, this, x0, x1, x2, x3, x4);
     }
+    */
 });
 
 root.array = root.object.createWithPayload([]);
@@ -623,41 +625,27 @@ extend(root.object, {
 extend(root.function, {
     "__ctor__":(function () {
         function F() {};
-        var ctor0 = clos(new Function ("$this", "dataCache",
-            "if ($this === dataCache[6]) {\n" +
-            "    var obj = dataCache[5].createWithPayload(new dataCache[4]);\n" +
-            "    var r   = $this.call0(obj);\n" +
-            "    return ((typeof r) === 'object' && r !== null) ? r : obj;\n" +
-            "}\n" + 
-            "return bailout($this, dataCache);"
-        ));
 
-        var ctor1 = clos(new Function ("$this", "dataCache", "x0", 
-            "if ($this === dataCache[6]) {\n" +
-            "    var obj = dataCache[5].createWithPayload(new dataCache[4]);\n" +
-            "    var r   = $this.call1(obj, x0);\n" +
-            "    return ((typeof r) === 'object' && r !== null) ? r : obj;\n" +
-            "}\n" + 
-            "return bailout($this, dataCache, x0);"
-        ));
-
-        var ctor2 = clos(new Function ("$this", "dataCache", "x0", "x1",
-            "if ($this === dataCache[6]) {\n" +
-            "    var obj = dataCache[5].createWithPayload(new dataCache[4]);\n" +
-            "    var r   = $this.call2(obj, x0, x1);\n" +
-            "    return ((typeof r) === 'object' && r !== null) ? r : obj;\n" +
-            "}\n" + 
-            "return bailout($this, dataCache, x0, x1);"
-        ));
-
-        var ctor3 = clos(new Function ("$this", "dataCache", "x0", "x1", "x2",
-            "if ($this === dataCache[6]) {\n" +
-            "    var obj = dataCache[5].createWithPayload(new dataCache[4]);\n" +
-            "    var r   = $this.call3(obj, x0, x1, x2);\n" +
-            "    return ((typeof r) === 'object' && r !== null) ? r : obj;\n" +
-            "}\n" + 
-            "return bailout($this, dataCache, x0, x1, x2);"
-        ));
+        var argNbs = [];
+        function argNb(nb) {
+            if (argNbs[nb] === undefined) {
+                var args = [];
+                for (var i = 0; i < nb; ++i) {
+                    args.push("x"+ i); 
+                }
+                var body = "return $this.call" + nb + "(" + ["obj"].concat(args).join(",") + ");"
+                argNbs[nb] = clos(Function.apply(null, ["$this", "dataCache"].concat(args).concat([
+                    "if ($this === dataCache[6]) {\n" +
+                    "    var obj = dataCache[5].createWithPayload(new dataCache[4]);\n" +
+                    "    var r   = $this.call" + nb + "(" + ["obj"].concat(args).join(",") + ");\n" +
+                    "    return ((typeof r) === 'object' && r !== null) ? r : obj;\n" +
+                    "}\n" + 
+                    "return bailout(" + ["$this", "dataCache"].concat(args).join(",") + ");"
+                ])));
+            }
+            ensureCallMethodForArgNb(nb);
+            return argNbs[nb];
+        };
 
         return clos(function ($this, $closure) {
             var args = Array.prototype.slice.call(arguments, 2);
@@ -674,15 +662,8 @@ extend(root.function, {
             dataCache.set(4, F);
             dataCache.set(5, rcv.get("prototype"));
             dataCache.set(6, rcv);
-        
-            switch(args.getLength()) {
-                case 0: return ctor0;
-                case 1: return ctor1;
-                case 2: return ctor2;
-                case 3: return ctor3;
-                default: throw new Error("Unsupported __ctor__ caching for " + args.getLength() + " arguments"); 
-            }
 
+            return argNb(args.getLength());
         }));
     })(),
     "call":clos(function ($this, $closure, obj) {
@@ -704,6 +685,7 @@ extend(root.function, {
                 //       more arguments
                 if (nb >= 10) throw new Error("Unsupported number of arguments");
             }
+            ensureCallMethodForArgNb(nb);
             return argNbs[nb];
         };
         
@@ -799,6 +781,7 @@ var initState;
             namedMethods[name][argNb] = Function.apply(null, ["$this", "dataCache"].concat(args).concat([body]));
         }
 
+        ensureCallMethodForArgNb(argNb);
         return namedMethods[name][argNb];
     }
 
@@ -815,7 +798,7 @@ var initState;
 
         if (isPrimitive(rcv)) {
             if (msg === "toString") return String(rcv);
-            else if (msg === "length" && (typeof rcv) === "string") return rcv.length;
+            else if (msg === "__get__" && args[0] === "length" && (typeof rcv) === "string") return rcv.length;
             throw new Error("Cannot call method '" + msg + "' of " + rcv);
         }
 
@@ -823,7 +806,7 @@ var initState;
         var method    = rcv.get(msg);
 
         if (!(method instanceof FunctionProxy)) {
-            throw new Error("Invalid message " + msg);
+            throw new Error("Invalid message " + msg + " for " + rcv);
         }
 
         var callFn    = method.get("call");
@@ -962,7 +945,7 @@ var root_global = extend(root.object.create(), {
         "max":clos(function ($this, $closure) { return Math.max.apply(null, Array.prototype.slice.call(arguments, 2)); }),
         "min":clos(function ($this, $closure) { return Math.min.apply(null, Array.prototype.slice.call(arguments, 2)); }),
         "pow":clos(function ($this, $closure, x, y) { return Math.pow(x,y); }),
-        //"random":clos(function ($this, $closure) { return Math.random(); }),
+        "random":clos(function ($this, $closure) { return Math.random(); }),
         "round":clos(function ($this, $closure, x) { return Math.round(x); }),
         "sin":clos(function ($this, $closure, x) { return Math.sin(x); }),
         "sqrt":clos(function ($this, $closure, x) { return Math.sqrt(x); }),
@@ -972,7 +955,7 @@ var root_global = extend(root.object.create(), {
 });
 
 String.prototype.call = function () {
-    throw new Error("TypeError: String primitive not a function");
+    throw new Error("TypeError: string primitive not a function");
 };
 String.prototype.get = function (name) {
     if (name === "length") return this.length;
@@ -987,12 +970,79 @@ String.prototype.__get__ = clos(function ($this, $closure, name) {
 });
 
 Number.prototype.call = function () {
-    throw new Error("TypeError: Number primitive not a function");
+    throw new Error("TypeError: number primitive not a function");
 };
-
 Number.prototype.get = function (name) {
-    throw new Error("Unsupported string property " + name);
+    throw new Error("Unsupported get on primitive number values");
 };
 Number.prototype.set = function (name, value) {
-    throw new Error("Unsupported set on primitive string values");
+    throw new Error("Unsupported set on primitive number values");
 };
+
+Boolean.prototype.call = function () {
+    throw new Error("TypeError: boolean primitive not a function");
+};
+Boolean.prototype.get = function (name) {
+    throw new Error("Unsupported get on primitive boolean values");
+};
+Boolean.prototype.set = function (name, value) {
+    throw new Error("Unsupported set on primitive boolean values");
+};
+
+RegExp.prototype.call = function () {
+    throw new Error("TypeError: regexp primitive not a function");
+};
+RegExp.prototype.get = function (name) {
+    throw new Error("Unsupported get on primitive regexp values");
+};
+RegExp.prototype.set = function (name, value) {
+    throw new Error("Unsupported set on primitive regexp values");
+};
+
+Date.prototype.call = function () {
+    throw new Error("TypeError: date primitive not a function");
+};
+Date.prototype.get = function (name) {
+    throw new Error("Unsupported get on primitive date values");
+};
+Date.prototype.set = function (name, value) {
+    throw new Error("Unsupported set on primitive date values");
+};
+
+Error.prototype.call = function () {
+    throw new Error("TypeError: error primitive not a function");
+};
+Error.prototype.get = function (name) {
+    throw new Error("Unsupported get on primitive error values");
+};
+Error.prototype.set = function (name, value) {
+    throw new Error("Unsupported set on primitive error values");
+};
+
+function ensureCallMethodForArgNb(nb) {
+
+    if (!hasProp(root.function, "call"+nb)) {
+        var callName = "call"+nb;
+        var args = [];
+        for (var i = 0; i < nb; ++i) {
+            args.push("x"+ i); 
+        }
+
+        var params = ["obj"].concat(args);
+        root.function[callName] = Function.apply(null, params.concat([
+        "    return this.payload(" + ["obj", "this"].concat(args).join(",") + ");"
+        ]));
+
+        var f = Function.apply(null, params.concat([
+        "    return this.call(" + ["obj"].concat(args).join(",") + ");"
+        ]));
+
+        root.object[callName]       = f;
+        String.prototype[callName]  = f;
+        Number.prototype[callName]  = f;
+        Boolean.prototype[callName] = f;
+        RegExp.prototype[callName]  = f;
+        Date.prototype[callName]    = f;
+        Error.prototype[callName]   = f;
+    }
+}
