@@ -315,7 +315,7 @@ extend(root.object, {
         return $this.get(name);
     }, (function () {
         var getLength = clos(new Function("$this", "dataCache", "name",
-            "return $this.getLength(dataCache);"
+            "return $this.getLength();"
         ));
 
         var names = {};
@@ -641,8 +641,18 @@ root.array = extend(extendProxy(root.object.createWithPayloadAndMap([], new Prox
         });
     })()),
     "concat":clos(function ($this, $closure) {
-        var args = Array.prototype.slice.call(arguments, 2);
-        return $this.payload.concat.apply($this.payload, args);
+        var args = Array.prototype.slice.call(arguments, 2).map(function (a) { 
+            if (a  instanceof ArrayProxy) return a.payload;
+            else return a;
+        });
+        return arr($this.payload.concat.apply($this.payload, args));
+    }),
+    "forEach":clos(function ($this, $closure, f, obj) {
+        arrayProxy = $this;
+        function g(x, i, arrayPayload) {
+            return f.payload(this, f, x, i, arrayProxy);
+        }
+        $this.payload.forEach(g, obj);
     }),
     "indexOf":clos(function ($this, $closure, searchValue, start) {
         return $this.payload.indexOf(searchValue, start);
@@ -652,6 +662,13 @@ root.array = extend(extendProxy(root.object.createWithPayloadAndMap([], new Prox
     }),
     "lastIndexOf":clos(function ($this, $closure, searchValue, start) {
         return $this.payload.lastIndexOf(searchValue, start);
+    }),
+    "map":clos(function ($this, $closure, f, obj) {
+        arrayProxy = $this;
+        function g(x, i, arrayPayload) {
+            return f.payload(this, f, x, i, arrayProxy);
+        }
+        return arr($this.payload.map(g, obj));
     }),
     "pop":clos(function ($this, $closure) {
         return $this.payload.pop();
@@ -822,23 +839,23 @@ root.string = extend(extendProxy(root.object.createWithPayloadAndMap(String.prot
         valueOf:PrimitiveProxyValueOf,
     }), {
     "charAt":clos(function ($this, $closure, i) {
-        return $this.payload.charAt(i);
+        return $this.box().payload.charAt(i);
     }),
     "charCodeAt":clos(function ($this, $closure, i) {
-        return $this.payload.charCodeAt(i);
+        return $this.box().payload.charCodeAt(i);
     }),
     "concat":clos(function ($this, $closure) {
         var args = Array.prototype.slice.call(arguments, 2);
-        return $this.payload.concat.apply($this.payload, args);
+        return $this.box().payload.concat.apply($this.payload, args);
     }),
     "indexOf":clos(function ($this, $closure, searchValue, start) {
-        return $this.payload.indexOf(searchValue, start);
+        return $this.box().payload.indexOf(searchValue, start);
     }),
     "lastIndexOf":clos(function ($this, $closure, searchValue, start) {
-        return $this.payload.lastIndexOf(searchValue, start);
+        return $this.box().payload.lastIndexOf(searchValue, start);
     }),
     "match":clos(function ($this, $closure, regexp) {
-        var r = $this.payload.match(regexp);
+        var r = $this.box().payload.match(regexp);
         if (r === null ) return r;
         var a = arr(r);
         a.set("index", r.index);
@@ -846,26 +863,26 @@ root.string = extend(extendProxy(root.object.createWithPayloadAndMap(String.prot
         return a;
     }),
     "replace":clos(function ($this, $closure, searchValue, newvalue) {
-        return $this.payload.replace(searchValue, newvalue);
+        return $this.box().payload.replace(searchValue, newvalue);
     }),
     "search":clos(function ($this, $closure, searchValue) {
-        return $this.payload.search(searchValue);
+        return $this.box().payload.search(searchValue);
     }),
     "slice":clos(function ($this, $closure, start, end) {
-        return $this.payload.slice(start, end);
+        return $this.box().payload.slice(start, end);
     }),
     "split":clos(function ($this, $closure, separator, limit) {
-        var r = $this.payload.split(separator, limit);
+        var r = $this.box().payload.split(separator, limit);
         return (r === null ) ? r : arr(r);
     }),
     "substr":clos(function ($this, $closure, start, length) {
-        return $this.payload.substr(start, length);
+        return $this.box().payload.substr(start, length);
     }),
     "toLowerCase":clos(function ($this, $closure) {
-        return $this.payload.toLowerCase();
+        return $this.box().payload.toLowerCase();
     }),
     "toUpperCase":clos(function ($this, $closure) {
-        return $this.payload.toUpperCase();
+        return $this.box().payload.toUpperCase();
     }),
     "toString":clos(function ($this, $closure) {
         return String($this);
@@ -894,6 +911,9 @@ String.prototype.call = function () {
 String.prototype.get = function (name) {
     return this.box().get(name);
 };
+String.prototype.getLength = function () {
+    return this.length;
+};
 String.prototype.set = function (name, value) {
     return this.box().set(name, value);
 };
@@ -913,19 +933,19 @@ root.number = extend(extendProxy(root.object.createWithPayloadAndMap(Number.prot
     "NaN":Number.prototype.NaN,
     "POSITIVE_INFINITY":Number.prototype.POSITIVE_INFINITY,
     "toExponential":clos(function ($this, $closure, x) {
-        return $this.payload.toExponential(x);
+        return $this.box().payload.toExponential(x);
     }),
     "toFixed":clos(function ($this, $closure, x) {
-        return $this.payload.toFixed(x);
+        return $this.box().payload.toFixed(x);
     }),
     "toPrecision":clos(function ($this, $closure, x) {
-        return $this.payload.toPrecision(x);
+        return $this.box().payload.toPrecision(x);
     }),
     "toString":clos(function ($this, $closure, radix) {
-        return $this.payload.toString(radix);
+        return $this.box().payload.toString(radix);
     }),
     "valueOf":clos(function ($this, $closure) {
-        return $this.payload.valueOf();
+        return $this.box().payload.valueOf();
     })
 });
 var NumberProxy = createFastConstructor(root.number);
@@ -964,7 +984,7 @@ root.boolean = extend(extendProxy(root.object.createWithPayloadAndMap(Boolean.pr
         return String($this);
     }),
     "valueOf":clos(function ($this, $closure) {
-        return $this.payload.valueOf();
+        return $this.box().payload.valueOf();
     })
 });
 var BooleanProxy = createFastConstructor(root.boolean);
@@ -1031,7 +1051,7 @@ root.regexp = extend(extendProxy(root.object.createWithPayloadAndMap(RegExp.prot
         return String($this);
     }),
     "exec":clos(function ($this, $closure, s) {
-        var r = $this.payload.exec(s);
+        var r = $this.box().payload.exec(s);
         if (r === null ) return r;
         var a = arr(r);
         a.set("index", r.index);
@@ -1039,7 +1059,7 @@ root.regexp = extend(extendProxy(root.object.createWithPayloadAndMap(RegExp.prot
         return a;
     }),
     "test":clos(function ($this, $closure, s) {
-        var r = $this.payload.exec(s);
+        var r = $this.box().payload.exec(s);
         return r === null ? r : arr(r);
     })
 });
@@ -1079,18 +1099,14 @@ root.date = extend(extendProxy(root.object.createWithPayloadAndMap(Date.prototyp
         return String($this);
     }),
     "getTime":clos(function ($this, $closure) {
-        return $this.payload.getTime();
+        return $this.box().payload.getTime();
     }),
 });
 var DateProxy = createFastConstructor(root.date);
 
-root_global.set("Date", extend(new FunctionProxy(function ($this, $closure) {
+root_global.set("Date", extend(new FunctionProxy(function ($this, $closure, x0, x1, x2, x3, x4, x5, x6) {
     var args = Array.prototype.slice.call(arguments, 2);
-    if ($this === root_global || $this === global) {
-        return Date.apply(null, args);
-    } else {
-        return new DateProxy(Date.apply(null, args));
-    }
+    return new DateProxy(new Date(x0, x1, x2, x3, x4, x5, x6));
 }), {
     "prototype":root.date,
 }));

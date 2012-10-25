@@ -1105,7 +1105,7 @@ ometa PhotonJSCodeGen {
   break end                                                        -> "break", 
   continue end                                                     -> "continue",
   number   :n                                                      -> String(n),
-  regexp   :str_e                                                  -> ("regexp(" + str_e + ")"),
+  regexp   :str_e                                                  -> ("(" + str_e + ")"),
   string   :s                                                      -> s.toProgramString(),
   unop     :op trans:x                                             -> ("(" + op + " " +  x + ")"),
   get      "arguments"                                             -> ("$arguments"),
