@@ -1,3 +1,4 @@
+// ------------------------------ Helper functions and options ------------------------------
 var options = {
     verbose:false,
     use_ic:true,
@@ -10,17 +11,47 @@ function isPrimitive(x) {
     return x === null || x === undefined || (typeof x) === "number" || (typeof x) === "string" || (typeof x) === "boolean";
 }
 
-function send(obj, msg) {
-
-    if (isPrimitive(obj)) throw new Error("send: Unsupported message sending to primitives");
-
-    var args = Array.prototype.slice.call(arguments, 2);
-    var m = obj.get(msg);
-
-    if (!(m instanceof FunctionProxy)) {
-        throw new Error("Invalid message " + msg + " for " + obj);
+function extend(obj, props) {
+    for (var p in props) {
+        if (props.hasOwnProperty(p)) {
+            obj.set(p, props[p]);
+        }
     }
-    return m.call.apply(m, [obj].concat(args));
+    return obj;
+}
+
+function extendProxy(o, props) {
+    for (var p in props) {
+        o[p] = props[p];
+    }
+
+    return o;
+}
+
+function clos(f, memoizeFn) {
+    var obj = new FunctionProxy(f);
+    if (memoizeFn !== undefined)
+        obj.set("__memoize__", memoizeFn);
+    return obj;
+}
+
+function arr(a) {
+    return new ArrayProxy(a);
+}
+
+function hasProp(obj, name) {
+    return Object.prototype.hasOwnProperty.call(obj, name);
+}
+
+function isEmpty(obj) {
+    for (var p in obj) {
+        if (hasProp(obj, p))
+            return false;
+    }
+    return true;
+}
+function error(string) {
+    throw new Error(string);
 }
 
 function ProxyMap() {
@@ -70,9 +101,53 @@ function getMap(map, props) {
     return current;
 }
 
-function Proxy(payload) {
-    throw new Error("Proxy should not be called directly");
+function createFastConstructor(object) {
+    object.createCtor = null;
+    object.newMap = new ProxyMap();
+
+    var ctor = function (payload) {
+        this.payload    = payload;
+        this.map        = object.newMap;
+        this.newMap     = null;
+        this.properties = null;
+    };
+    ctor.prototype = object;
+    return ctor;
+};
+
+function ensureCallMethodForArgNb(nb) {
+
+    if (!hasProp(root.function, "call"+nb)) {
+        var callName = "call"+nb;
+        var args = [];
+        for (var i = 0; i < nb; ++i) {
+            args.push("x"+ i); 
+        }
+
+        var params = ["obj"].concat(args);
+        root.function[callName] = Function.apply(null, params.concat([
+        "    return this.payload(" + ["obj", "this"].concat(args).join(",") + ");"
+        ]));
+
+        var f = Function.apply(null, params.concat([
+        "    return this.call(" + ["obj"].concat(args).join(",") + ");"
+        ]));
+
+        root.object[callName]       = f;
+        String.prototype[callName]  = f;
+        Number.prototype[callName]  = f;
+        Boolean.prototype[callName] = f;
+        RegExp.prototype[callName]  = f;
+        Date.prototype[callName]    = f;
+        Error.prototype[callName]   = f;
+    }
 }
+
+// ------------------------ Core Object Representation (Object and Function) --
+// Forward declaratin
+function FunctionProxy() {}
+function ArrayProxy()    {}
+
 function ProxyCreateWithPayload(payload) {
     return new this.createCtor(payload);
 }
@@ -99,7 +174,9 @@ root.object = {
     createWithPayload:function (payload) {
         if (this.newMap === null) {
             this.newMap = new ProxyMap(); 
+        } 
 
+        if (this.createCtor === null) {
             if (this !== root.object && 
                 !(this instanceof FunctionProxy) && 
                 !(this instanceof ArrayProxy)) {
@@ -113,7 +190,7 @@ root.object = {
                 this.properties = null;
             };
             this.createCtor.prototype = this;
-        } 
+        }
         return new this.createCtor(payload);
     }, 
     createWithPayloadAndMap:function (payload, map) {
@@ -147,90 +224,6 @@ root.object = {
         return this.get(n);
     },
 };
-Proxy.prototype = root.object;
-
-function extendProxy(o, props) {
-    for (var p in props) {
-        o[p] = props[p];
-    }
-}
-
-function LazyProxyGet(n) {
-    if (n === "length") return this.getLength();
-    return this.prototype.payload[n];
-}
-function LazyProxySet(n, v) {
-    this.payload.__proto__ = this.__proto__.payload; 
-    this.get = Proxy.prototype.get;
-    this.set = Proxy.prototype.set;
-    return setProp(this, n, v);
-};
-
-
-function ArrayProxyCreate () { 
-    throw new Error("Unsupported child creation from ArrayProxy"); 
-}
-function ArrayProxyGet(n) {
-    if (n >= 0 && n < this.payload.length) {
-        return this.payload[n];
-    } else if (n === "length") {
-        return this.getLength();
-    } else {
-        if (hasProp(this.map.properties, n)) {
-            return this.properties[n];
-        } else {
-            return this.__proto__.get(n);
-        }
-    }
-}
-
-function ArraySetProp(obj, n, v) {
-    if (obj.map.properties[n] !== undefined) {
-        return obj.properties[n] = v;
-    } else if (obj.map.siblings[n] !== undefined) {
-        if (obj.properties === null) 
-            obj.properties = {};
-        obj.map = obj.map.siblings[n];
-        return obj.properties[n] = v;
-    } else {
-        var newMap = new ProxyMap();
-        for (var p in obj.map.properties) {
-            newMap.properties[p] = true;
-        }
-        newMap.properties[n] = true;
-        obj.map.siblings[n] = newMap;
-        obj.map = newMap;
-        if (obj.properties === null)
-            obj.properties = {};
-        return obj.properties[n] = v;
-    }
-}
-function ArrayProxySet(n, v) {
-    if (n >= 0 && n < this.payload.length || (typeof n) === "number") {
-        return this.payload[n] = v;
-    } else if (n === "length") {
-        return this.payload.length = v;
-    } else if (n === "__proto__") {
-        throw new Error("Unsupported modification of the __proto__ property");
-    } else {
-        return ArraySetProp(this, n, v);
-    }
-}
-/*
-function ArrayProxySetOpt(n, v) {
-    if (n >= 0 && n < this.payload.length || (typeof n) === "number") {
-        return this.payload[n] = v;
-    } else if (n === "length") {
-        return this.payload.length = v;
-    } else if (n === "__proto__") {
-        throw new Error("Unsupported modification of the __proto__ property");
-    } else {
-        return setProp(this, n, v);
-    }
-
-}
-*/
-
 
 function FunctionProxyGet(n) {
     if (n === "length") {
@@ -279,21 +272,10 @@ function FunctionProxyCreate() {
 }
 
 
-root.function = root.object.createWithPayload(function ($this, $closure) {});
+root.function = root.object.createWithPayloadAndMap(function ($this, $closure) {}, new ProxyMap());
 root.function.payload.__proto__ = root.object.payload;
-root.function.map = new ProxyMap();
 
-// To force initialization of newMap and createCtor
-root.function.createWithPayload(function () {});
-
-// For faster array creation
-function FunctionProxy(f) {
-    this.payload = f;
-    this.map     = root.function.newMap;
-    this.newMap  = null;
-    this.properties = null;
-}
-FunctionProxy.prototype = root.function;
+FunctionProxy = createFastConstructor(root.function);
 
 extendProxy(root.function, {
     get:FunctionProxyGet,
@@ -308,169 +290,10 @@ extendProxy(root.function, {
     },
     code:function () {
         return Function.prototype.toString.call(this.payload);
-    },
-
-    /*
-    call0:function (obj) {
-        return this.payload(obj, this);
-    },
-    call1:function (obj, x0) {
-        return this.payload(obj, this, x0);
-    },
-    call2:function (obj, x0, x1) {
-        return this.payload(obj, this, x0, x1);
-    }, 
-    call3:function (obj, x0, x1, x2) {
-        return this.payload(obj, this, x0, x1, x2);
-    },
-    call4:function (obj, x0, x1, x2, x3) {
-        return this.payload(obj, this, x0, x1, x2, x3);
-    },
-    call5:function (obj, x0, x1, x2, x3, x4) {
-        return this.payload(obj, this, x0, x1, x2, x3, x4);
-    }
-    */
-});
-
-root.array = root.object.createWithPayload([]);
-//root.array.payload.__proto__ = root.object.payload;
-root.array.map = new ProxyMap();
-root.array.properties = null;
-
-// To force initialization of newMap and createCtor
-root.array.createWithPayload([]);
-
-// For faster array creation
-function ArrayProxy(a) {
-    this.payload = a;
-    this.map     = root.array.newMap;
-    this.newMap  = null;
-    this.properties = null;
-}
-ArrayProxy.prototype = root.array;
-
-
-/*
-    set:function (n, v) {
-        if (this === root.array) {
-            // These checks guarantee the correct return value
-            // when accessing array properties that were never assigned
-            if (n === "__proto__") {
-                throw new Error("Unsupported modification of the __proto__ property");
-            } else if ((typeof n) === "number") {
-                throw new Error("Unsupported assignation of numerical properties");
-            }
-        }
-        throw new Error("Unimplemented Array set operation");
-        //return this.payload[n] = v;
-    }
-*/
-extendProxy(root.array, {
-    get:ArrayProxyGet,
-    set:ArrayProxySet,
-    toString:function () {
-        //return "[ArrayProxy [" + Array.prototype.join.call(this.payload, ",") + "]]";
-        return this.payload.join(",");
-    },
-
-    // Optimized methods
-    getNum:function (dataCache, n) {
-        if (n >= 0 && n < this.payload.length)
-            return this.payload[n];
-        else 
-            return this.get(n);
-    },
-});
-
-
-/*
-root.date = root.object.createWithPayload({
-    toValue:function ()  { return NaN; },
-    toString:function () { return "Invalid date"; }
-});
-root.date.payload.__proto__ = root.object.payload;
-root.date.map = new ProxyMap();
-
-// To force initialization of newMap and createCtor
-//root.date.createWithPayload(new Date());
-
-function DateProxy(d) {
-    this.payload = d;
-    this.map = root.date.newMap;
-    this.newMap = null; 
-    this.properties = null;
-}
-DateProxy.prototype = root.date;
-
-function DateProxyGet(name) {
-    if (this === root.date) {
-        return this.payload[name];
-    } else {
-        return this.__proto__.payload[name];
-    }
-}
-function DateProxySet(name, value) {
-    if (this !== root.date) {
-        this.payload.__proto__ = this.__proto__.payload; 
-        this.get = Proxy.prototype.get;
-        this.set = DateProxySetOpt;
-    }
-    return setProp(this, name, value);
-}
-function DateProxySetOpt(name, value) {
-    if (n === "__proto__") {
-        throw new Error("Unsupported modification of the __proto__ property");
-    } 
-    return setProp(this, name, value);
-}
-
-extendProxy(root.date, {
-    get:DateProxyGet,
-    set:DateProxySet,
-    toString:function () {
-        if (this === root.date) {
-            return NaN;
-        } else {
-            return Date.prototype.toString.call(this.payload);
-        }
     }
 });
-*/
 
-function extend(obj, props) {
-    for (var p in props) {
-        if (props.hasOwnProperty(p)) {
-            obj.set(p, props[p]);
-        }
-    }
-    return obj;
-}
-
-function clos(f, memoizeFn) {
-    var obj = root.function.createWithPayload(f);
-    if (memoizeFn !== undefined)
-        obj.set("__memoize__", memoizeFn);
-    return obj;
-}
-
-function arr(a) {
-    return new ArrayProxy(a);
-}
-
-function hasProp(obj, name) {
-    return Object.prototype.hasOwnProperty.call(obj, name);
-}
-
-function isEmpty(obj) {
-    for (var p in obj) {
-        if (hasProp(obj, p))
-            return false;
-    }
-    return true;
-}
-function error(string) {
-    throw new Error(string);
-}
+// ------------------------ Core Object Behavior (Object and Function) --------
 
 extend(root.object, {
     __new__:clos(function ($this, $closure, obj) {
@@ -704,7 +527,76 @@ extend(root.function, {
     })
 });
 
-extend(root.array, {
+// ------------------------ Standard Library Representation and Behavior ------
+
+function ArrayProxyCreate () { 
+    throw new Error("Unsupported child creation from ArrayProxy"); 
+}
+function ArrayProxyGet(n) {
+    if (n >= 0 && n < this.payload.length) {
+        return this.payload[n];
+    } else if (n === "length") {
+        return this.getLength();
+    } else {
+        if (hasProp(this.map.properties, n)) {
+            return this.properties[n];
+        } else {
+            return this.__proto__.get(n);
+        }
+    }
+}
+
+function ArrayProxySet(n, v) {
+    if (n >= 0 && n < this.payload.length || (typeof n) === "number") {
+        return this.payload[n] = v;
+    } else if (n === "length") {
+        return this.payload.length = v;
+    } else if (n === "__proto__") {
+        throw new Error("Unsupported modification of the __proto__ property");
+    } else {
+        return ArraySetProp(this, n, v);
+    }
+}
+
+function ArraySetProp(obj, n, v) {
+    if (obj.map.properties[n] !== undefined) {
+        return obj.properties[n] = v;
+    } else if (obj.map.siblings[n] !== undefined) {
+        if (obj.properties === null) 
+            obj.properties = {};
+        obj.map = obj.map.siblings[n];
+        return obj.properties[n] = v;
+    } else {
+        var newMap = new ProxyMap();
+        for (var p in obj.map.properties) {
+            newMap.properties[p] = true;
+        }
+        newMap.properties[n] = true;
+        obj.map.siblings[n] = newMap;
+        obj.map = newMap;
+        if (obj.properties === null)
+            obj.properties = {};
+        return obj.properties[n] = v;
+    }
+}
+
+
+root.array = extend(extendProxy(root.object.createWithPayloadAndMap([], new ProxyMap), {
+    get:ArrayProxyGet,
+    set:ArrayProxySet,
+    toString:function () {
+        //return "[ArrayProxy [" + Array.prototype.join.call(this.payload, ",") + "]]";
+        return this.payload.join(",");
+    },
+
+    // Optimized methods
+    getNum:function (dataCache, n) {
+        if (n >= 0 && n < this.payload.length)
+            return this.payload[n];
+        else 
+            return this.get(n);
+    },
+}), {
     __get__:clos(function ($this, $closure, name) {
         return $this.get(name);
     }, (function () {
@@ -759,97 +651,8 @@ extend(root.array, {
     })())
     */
 });
+var ArrayProxy = createFastConstructor(root.array);
 
-var global      = this;
-var defaultCall = root.function.get("call");
-
-var initState;
-
-(function () {
-    var namedMethods = {};
-    function memNamedMethod(name, argNb) {
-        if (!hasProp(namedMethods, name)) {
-            namedMethods[name] = []; 
-        }
-
-        if (namedMethods[name][argNb] === undefined) {
-            var args = [];
-            for (var i = 0; i < argNb; ++i) {
-                args.push("x"+ i); 
-            }
-            var body = "    return $this.get(\""+name+"\").call"+argNb+"(" + ["$this"].concat(args).join(",") + ");\n";
-            namedMethods[name][argNb] = Function.apply(null, ["$this", "dataCache"].concat(args).concat([body]));
-        }
-
-        ensureCallMethodForArgNb(argNb);
-        return namedMethods[name][argNb];
-    }
-
-    var cachedMethods = {};
-    function memCachedMethod(argNb) {
-
-    }
-
-    initState = function (rcv, dataCache) {
-        var args = Array.prototype.slice.call(arguments, 2);
-        var dataCacheName = "dataCache" + dataCache[0];
-        var codeCacheName = "codeCache" + dataCache[0];
-        var msg  = dataCache[1];
-
-        if (isPrimitive(rcv)) {
-            if (msg === "toString") return String(rcv);
-            else if (msg === "__get__" && args[0] === "length" && (typeof rcv) === "string") return rcv.length;
-            throw new Error("Cannot call method '" + msg + "' of " + rcv);
-        }
-
-        // TODO: Do not cache numerical messages!!!
-        var method    = rcv.get(msg);
-
-        if (!(method instanceof FunctionProxy)) {
-            throw new Error("Invalid message " + msg + " for " + rcv);
-        }
-
-        var callFn    = method.get("call");
-
-        if (callFn === defaultCall) {
-            var memMethod = send(method, "__memoize__", rcv, method, arr(args), arr(dataCache));
-
-
-            if (memMethod !== null) {       
-                var callFn    = memMethod.get("call");
-                if (callFn === defaultCall) {
-                    global[codeCacheName]    = memMethod.payload;
-                    global[dataCacheName][3] = rcv.map;
-                    return method.call.apply(method, [rcv].concat(args));
-                }
-
-                throw new Error();
-            } 
-            
-            if (options.verbose) print("Caching generic method call for " + msg);
-            global[codeCacheName]    = memNamedMethod(msg, args.length);
-            global[dataCacheName][3] = rcv.map;
-            return method.call.apply(method, [rcv].concat(args));
-        }
-
-        throw new Error();
-    };
-})();
-
-function bailout(rcv, dataCache) {
-    if (rcv === undefined || rcv === null ) {
-        throw new Error("Invalid message for '" + rcv + "'");
-    } 
-    // Remove cache from invalidation set(s) and reset data cache
-    //tracker.removeCacheLinks("codeCache"+cacheData[0]);
-    global["codeCache"+dataCache[0]] = initState;
-    dataCache.length = 3;
-
-    if (options.verbose) print("Bailed out from codeCache" + dataCache[0]);
-
-    // Setup cache
-    return initState.apply(null, [rcv, dataCache].concat(Array.prototype.slice.call(arguments, 2)));
-}
 
 var root_global = extend(root.object.create(), {
     /*
@@ -954,20 +757,100 @@ var root_global = extend(root.object.create(), {
     "NaN":NaN
 });
 
+/*
+root.date = root.object.createWithPayload({
+    toValue:function ()  { return NaN; },
+    toString:function () { return "Invalid date"; }
+});
+root.date.payload.__proto__ = root.object.payload;
+root.date.map = new ProxyMap();
+
+// To force initialization of newMap and createCtor
+//root.date.createWithPayload(new Date());
+
+function DateProxy(d) {
+    this.payload = d;
+    this.map = root.date.newMap;
+    this.newMap = null; 
+    this.properties = null;
+}
+DateProxy.prototype = root.date;
+
+function DateProxyGet(name) {
+    if (this === root.date) {
+        return this.payload[name];
+    } else {
+        return this.__proto__.payload[name];
+    }
+}
+function DateProxySet(name, value) {
+    if (this !== root.date) {
+        this.payload.__proto__ = this.__proto__.payload; 
+        this.get = root.object.get;
+        this.set = DateProxySetOpt;
+    }
+    return setProp(this, name, value);
+}
+function DateProxySetOpt(name, value) {
+    if (n === "__proto__") {
+        throw new Error("Unsupported modification of the __proto__ property");
+    } 
+    return setProp(this, name, value);
+}
+
+extendProxy(root.date, {
+    get:DateProxyGet,
+    set:DateProxySet,
+    toString:function () {
+        if (this === root.date) {
+            return NaN;
+        } else {
+            return Date.prototype.toString.call(this.payload);
+        }
+    }
+});
+*/
+
+root.string = extend(extendProxy(root.object.createWithPayloadAndMap("", new ProxyMap()), {
+        get:function (n) {
+            if (n === "length") {
+                return this.getLength();
+            } else {
+                if (hasProp(this.map.properties, n)) {
+                    return this.properties[n];
+                } else {
+                    return this.__proto__.get(n);
+                }
+            }
+        },
+        set:function (n, v) {
+            if (n === "length") {
+                return v;
+            } else if (n === "__proto__") {
+                throw new Error("Unsupported modification of the __proto__ property");
+            } else {
+                return ArraySetProp(this, n, v);
+            }
+        },
+        toString:function () { return this.payload; },
+    }), {
+    
+});
+
+
+// ------------------------ Primitive values autoboxing ------------------------
 String.prototype.call = function () {
     throw new Error("TypeError: string primitive not a function");
 };
 String.prototype.get = function (name) {
-    if (name === "length") return this.length;
-    else if (name === "__get__") return this.__get__;
-    else throw new Error("Unsupported string property " + name);
+    return this.box().get(name);
 };
 String.prototype.set = function (name, value) {
-    throw new Error("Unsupported set on primitive string values");
+    return this.box().set(name, value);
 };
-String.prototype.__get__ = clos(function ($this, $closure, name) {
-    return $this.get(name);
-});
+String.prototype.box = function () {
+    return root.string.createWithPayload(this);
+};
 
 Number.prototype.call = function () {
     throw new Error("TypeError: number primitive not a function");
@@ -977,6 +860,9 @@ Number.prototype.get = function (name) {
 };
 Number.prototype.set = function (name, value) {
     throw new Error("Unsupported set on primitive number values");
+};
+Number.prototype.box = function () {
+    throw new Error("Unsupported box");
 };
 
 Boolean.prototype.call = function () {
@@ -988,6 +874,9 @@ Boolean.prototype.get = function (name) {
 Boolean.prototype.set = function (name, value) {
     throw new Error("Unsupported set on primitive boolean values");
 };
+Boolean.prototype.box = function () {
+    throw new Error("Unsupported box");
+};
 
 RegExp.prototype.call = function () {
     throw new Error("TypeError: regexp primitive not a function");
@@ -997,6 +886,9 @@ RegExp.prototype.get = function (name) {
 };
 RegExp.prototype.set = function (name, value) {
     throw new Error("Unsupported set on primitive regexp values");
+};
+RegExp.prototype.box = function () {
+    throw new Error("Unsupported box");
 };
 
 Date.prototype.call = function () {
@@ -1008,6 +900,9 @@ Date.prototype.get = function (name) {
 Date.prototype.set = function (name, value) {
     throw new Error("Unsupported set on primitive date values");
 };
+Date.prototype.box = function () {
+    throw new Error("Unsupported box");
+};
 
 Error.prototype.call = function () {
     throw new Error("TypeError: error primitive not a function");
@@ -1018,31 +913,116 @@ Error.prototype.get = function (name) {
 Error.prototype.set = function (name, value) {
     throw new Error("Unsupported set on primitive error values");
 };
+Error.prototype.box = function () {
+    throw new Error("Unsupported box");
+};
 
-function ensureCallMethodForArgNb(nb) {
 
-    if (!hasProp(root.function, "call"+nb)) {
-        var callName = "call"+nb;
-        var args = [];
-        for (var i = 0; i < nb; ++i) {
-            args.push("x"+ i); 
+
+// ------------------------------ Message sending and Cache handling -----------
+function send(obj, msg) {
+
+    if (isPrimitive(obj)) throw new Error("send: Unsupported message sending to primitives");
+
+    var args = Array.prototype.slice.call(arguments, 2);
+    var m = obj.get(msg);
+
+    if (!(m instanceof FunctionProxy)) {
+        throw new Error("Invalid message " + msg + " for " + obj);
+    }
+    return m.call.apply(m, [obj].concat(args));
+}
+
+var global      = this;
+var defaultCall = root.function.get("call");
+
+var initState;
+
+(function () {
+    var namedMethods = {};
+    function memNamedMethod(name, argNb) {
+        if (!hasProp(namedMethods, name)) {
+            namedMethods[name] = []; 
         }
 
-        var params = ["obj"].concat(args);
-        root.function[callName] = Function.apply(null, params.concat([
-        "    return this.payload(" + ["obj", "this"].concat(args).join(",") + ");"
-        ]));
+        if (namedMethods[name][argNb] === undefined) {
+            var args = [];
+            for (var i = 0; i < argNb; ++i) {
+                args.push("x"+ i); 
+            }
+            var body = "    return $this.get(\""+name+"\").call"+argNb+"(" + ["$this"].concat(args).join(",") + ");\n";
+            namedMethods[name][argNb] = Function.apply(null, ["$this", "dataCache"].concat(args).concat([body]));
+        }
 
-        var f = Function.apply(null, params.concat([
-        "    return this.call(" + ["obj"].concat(args).join(",") + ");"
-        ]));
-
-        root.object[callName]       = f;
-        String.prototype[callName]  = f;
-        Number.prototype[callName]  = f;
-        Boolean.prototype[callName] = f;
-        RegExp.prototype[callName]  = f;
-        Date.prototype[callName]    = f;
-        Error.prototype[callName]   = f;
+        ensureCallMethodForArgNb(argNb);
+        return namedMethods[name][argNb];
     }
+
+    var cachedMethods = {};
+    function memCachedMethod(argNb) {
+
+    }
+
+    initState = function (rcv, dataCache) {
+        var args = Array.prototype.slice.call(arguments, 2);
+        var dataCacheName = "dataCache" + dataCache[0];
+        var codeCacheName = "codeCache" + dataCache[0];
+        var msg  = dataCache[1];
+
+        if (isPrimitive(rcv)) {
+            if (msg === "toString") return String(rcv);
+            else if (msg === "__get__" && args[0] === "length" && (typeof rcv) === "string") return rcv.length;
+            throw new Error("Cannot call method '" + msg + "' of " + rcv);
+        }
+
+        // TODO: Do not cache numerical messages!!!
+        var method    = rcv.get(msg);
+
+        if (!(method instanceof FunctionProxy)) {
+            throw new Error("Invalid message " + msg + " for " + rcv);
+        }
+
+        var callFn    = method.get("call");
+
+        if (callFn === defaultCall) {
+            var memMethod = send(method, "__memoize__", rcv, method, arr(args), arr(dataCache));
+
+
+            if (memMethod !== null) {       
+                var callFn    = memMethod.get("call");
+                if (callFn === defaultCall) {
+                    global[codeCacheName]    = memMethod.payload;
+                    global[dataCacheName][3] = rcv.map;
+                    return method.call.apply(method, [rcv].concat(args));
+                }
+
+                throw new Error();
+            } 
+            
+            if (options.verbose) print("Caching generic method call for " + msg);
+            global[codeCacheName]    = memNamedMethod(msg, args.length);
+            global[dataCacheName][3] = rcv.map;
+            return method.call.apply(method, [rcv].concat(args));
+        }
+
+        throw new Error();
+    };
+})();
+
+function bailout(rcv, dataCache) {
+    if (rcv === undefined || rcv === null ) {
+        throw new Error("Invalid message for '" + rcv + "'");
+    } 
+    // Remove cache from invalidation set(s) and reset data cache
+    //tracker.removeCacheLinks("codeCache"+cacheData[0]);
+    global["codeCache"+dataCache[0]] = initState;
+    dataCache.length = 3;
+
+    if (options.verbose) print("Bailed out from codeCache" + dataCache[0]);
+
+    // Setup cache
+    return initState.apply(null, [rcv, dataCache].concat(Array.prototype.slice.call(arguments, 2)));
 }
+
+// ------------------------------ Tracking mecanism for cache invalidation ----
+// TODO
