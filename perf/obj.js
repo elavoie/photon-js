@@ -60,9 +60,9 @@ function ProxyMap() {
 }
 
 function setProp(obj, n, v) {
-    if (obj.map.properties[n] !== undefined) {
+    if (obj.map.properties[n] === true) {
         return obj.payload[n] = v;
-    } else if (obj.map.siblings[n] !== undefined) {
+    } else if (obj.map.siblings[n] instanceof ProxyMap) {
         obj.map = obj.map.siblings[n];
         return obj.payload[n] = v;
     } else {
@@ -160,6 +160,7 @@ root.object = {
     newMap:null,
     createCtor:null,
 
+    box:function () { return this; },
     call:function () {
         throw new Error("Object is not a function");
     },
@@ -406,7 +407,7 @@ extend(root.object, {
             var cacheId = dataCache.get(0);
 
             if (dataCache.get(2)[1] === "string" && name !== "__proto__" && rcv.set === root.object.set) {
-                if (rcv.map.properties[name] !== undefined) {
+                if (rcv.map.properties[name] === true) {
                     // TODO: Handle tracking correctly depending on if the property
                     //       has already been used as a method or not
                     return updateProperty(name);
@@ -559,9 +560,9 @@ function ArrayProxySet(n, v) {
 }
 
 function ArraySetProp(obj, n, v) {
-    if (obj.map.properties[n] !== undefined) {
+    if (obj.map.properties[n] === true) {
         return obj.properties[n] = v;
-    } else if (obj.map.siblings[n] !== undefined) {
+    } else if (obj.map.siblings[n] instanceof ProxyMap) {
         if (obj.properties === null) 
             obj.properties = {};
         obj.map = obj.map.siblings[n];
@@ -757,88 +758,53 @@ var root_global = extend(root.object.create(), {
     "NaN":NaN
 });
 
-/*
-root.date = root.object.createWithPayload({
-    toValue:function ()  { return NaN; },
-    toString:function () { return "Invalid date"; }
-});
-root.date.payload.__proto__ = root.object.payload;
-root.date.map = new ProxyMap();
 
-// To force initialization of newMap and createCtor
-//root.date.createWithPayload(new Date());
-
-function DateProxy(d) {
-    this.payload = d;
-    this.map = root.date.newMap;
-    this.newMap = null; 
-    this.properties = null;
-}
-DateProxy.prototype = root.date;
-
-function DateProxyGet(name) {
-    if (this === root.date) {
-        return this.payload[name];
+function PrimitiveProxyGet(n) {
+    if (n === "length") {
+        return this.getLength();
     } else {
-        return this.__proto__.payload[name];
-    }
-}
-function DateProxySet(name, value) {
-    if (this !== root.date) {
-        this.payload.__proto__ = this.__proto__.payload; 
-        this.get = root.object.get;
-        this.set = DateProxySetOpt;
-    }
-    return setProp(this, name, value);
-}
-function DateProxySetOpt(name, value) {
-    if (n === "__proto__") {
-        throw new Error("Unsupported modification of the __proto__ property");
-    } 
-    return setProp(this, name, value);
-}
-
-extendProxy(root.date, {
-    get:DateProxyGet,
-    set:DateProxySet,
-    toString:function () {
-        if (this === root.date) {
-            return NaN;
+        if (hasProp(this.map.properties, n)) {
+            return this.properties[n];
         } else {
-            return Date.prototype.toString.call(this.payload);
+            return this.__proto__.get(n);
         }
     }
-});
-*/
-
-root.string = extend(extendProxy(root.object.createWithPayloadAndMap("", new ProxyMap()), {
-        get:function (n) {
-            if (n === "length") {
-                return this.getLength();
-            } else {
-                if (hasProp(this.map.properties, n)) {
-                    return this.properties[n];
-                } else {
-                    return this.__proto__.get(n);
-                }
-            }
-        },
-        set:function (n, v) {
-            if (n === "length") {
-                return v;
-            } else if (n === "__proto__") {
-                throw new Error("Unsupported modification of the __proto__ property");
-            } else {
-                return ArraySetProp(this, n, v);
-            }
-        },
-        toString:function () { return this.payload; },
-    }), {
-    
-});
-
+}
 
 // ------------------------ Primitive values autoboxing ------------------------
+function PrimitiveProxySet(n, v) {
+    if (n === "length") {
+        return this.payload.n = v;
+    } else if (n === "__proto__") {
+        throw new Error("Unsupported modification of the __proto__ property");
+    } else {
+        return ArraySetProp(this, n, v);
+    }
+}
+
+function PrimitiveProxyToString() {
+    return this.payload.toString();
+}
+
+function PrimitiveProxyValueOf() {
+    return this.payload.valueOf();
+}
+
+root.string = extend(extendProxy(root.object.createWithPayloadAndMap(String.prototype, new ProxyMap()), {
+        get:PrimitiveProxyGet,
+        set:PrimitiveProxySet,
+        toString:PrimitiveProxyToString,
+        valueOf:PrimitiveProxyValueOf,
+    }), {
+    "toString":clos(function ($this, $closure) {
+        return String($this);
+    }),
+    "concat":clos(function ($this, $closure, s) {
+        return $this.payload.concat(s);
+    })
+});
+var StringProxy = createFastConstructor(root.string);
+
 String.prototype.call = function () {
     throw new Error("TypeError: string primitive not a function");
 };
@@ -849,88 +815,146 @@ String.prototype.set = function (name, value) {
     return this.box().set(name, value);
 };
 String.prototype.box = function () {
-    return root.string.createWithPayload(this);
+    return new StringProxy(this);
 };
+
+root.number = extend(extendProxy(root.object.createWithPayloadAndMap(Number.prototype, new ProxyMap()), {
+        get:PrimitiveProxyGet,
+        set:PrimitiveProxySet,
+        toString:PrimitiveProxyToString,
+        valueOf:PrimitiveProxyValueOf,
+    }), {
+    "toString":clos(function ($this, $closure) {
+        return String($this);
+    })
+});
+var NumberProxy = createFastConstructor(root.number);
 
 Number.prototype.call = function () {
     throw new Error("TypeError: number primitive not a function");
 };
 Number.prototype.get = function (name) {
-    throw new Error("Unsupported get on primitive number values");
+    return this.box().get(name);
 };
 Number.prototype.set = function (name, value) {
-    throw new Error("Unsupported set on primitive number values");
+    return this.box().set(name, value);
 };
 Number.prototype.box = function () {
-    throw new Error("Unsupported box");
+    return new NumberProxy(this);
 };
 
+root.boolean = extend(extendProxy(root.object.createWithPayloadAndMap(Boolean.prototype, new ProxyMap()), {
+        get:PrimitiveProxyGet,
+        set:PrimitiveProxySet,
+        toString:PrimitiveProxyToString,
+        valueOf:PrimitiveProxyValueOf,
+    }), {
+    "toString":clos(function ($this, $closure) {
+        return String($this);
+    })
+});
+var BooleanProxy = createFastConstructor(root.boolean);
 Boolean.prototype.call = function () {
     throw new Error("TypeError: boolean primitive not a function");
 };
 Boolean.prototype.get = function (name) {
-    throw new Error("Unsupported get on primitive boolean values");
+    return this.box().get(name);
 };
 Boolean.prototype.set = function (name, value) {
-    throw new Error("Unsupported set on primitive boolean values");
+    return this.box().set(name, value);
 };
 Boolean.prototype.box = function () {
-    throw new Error("Unsupported box");
+    return new BooleanProxy(this);
 };
 
+root.regexp = extend(extendProxy(root.object.createWithPayloadAndMap(RegExp.prototype, new ProxyMap()), {
+        get:PrimitiveProxyGet,
+        set:PrimitiveProxySet,
+        toString:PrimitiveProxyToString,
+        valueOf:PrimitiveProxyValueOf,
+    }), {
+    "toString":clos(function ($this, $closure) {
+        return String($this);
+    })
+});
+var RegExpProxy = createFastConstructor(root.regexp);
 RegExp.prototype.call = function () {
     throw new Error("TypeError: regexp primitive not a function");
 };
 RegExp.prototype.get = function (name) {
-    throw new Error("Unsupported get on primitive regexp values");
+    return this.box().get(name);
 };
 RegExp.prototype.set = function (name, value) {
-    throw new Error("Unsupported set on primitive regexp values");
+    return this.box().set(name, value);
 };
 RegExp.prototype.box = function () {
-    throw new Error("Unsupported box");
+    return new RegExpProxy(this);
 };
 
+root.date = extend(extendProxy(root.object.createWithPayloadAndMap(Date.prototype, new ProxyMap()), {
+        get:PrimitiveProxyGet,
+        set:PrimitiveProxySet,
+        toString:PrimitiveProxyToString,
+        valueOf:PrimitiveProxyValueOf,
+    }), {
+    "toString":clos(function ($this, $closure) {
+        return String($this);
+    })
+});
+var DateProxy = createFastConstructor(root.date);
 Date.prototype.call = function () {
     throw new Error("TypeError: date primitive not a function");
 };
 Date.prototype.get = function (name) {
-    throw new Error("Unsupported get on primitive date values");
+    return this.box().get(name);
 };
 Date.prototype.set = function (name, value) {
-    throw new Error("Unsupported set on primitive date values");
+    return this.box().set(name, value);
 };
 Date.prototype.box = function () {
-    throw new Error("Unsupported box");
+    return new DateProxy(this);
 };
 
+root.error = extend(extendProxy(root.object.createWithPayloadAndMap(Error.prototype, new ProxyMap()), {
+        get:PrimitiveProxyGet,
+        set:PrimitiveProxySet,
+        toString:PrimitiveProxyToString,
+        valueOf:PrimitiveProxyValueOf,
+    }), {
+    "toString":clos(function ($this, $closure) {
+        return String($this);
+    })
+});
+var ErrorProxy = createFastConstructor(root.error);
 Error.prototype.call = function () {
     throw new Error("TypeError: error primitive not a function");
 };
 Error.prototype.get = function (name) {
-    throw new Error("Unsupported get on primitive error values");
+    return this.box().get(name);
 };
 Error.prototype.set = function (name, value) {
-    throw new Error("Unsupported set on primitive error values");
+    return this.box().set(name, value);
 };
 Error.prototype.box = function () {
-    throw new Error("Unsupported box");
+    return new ErrorProxy(this);
 };
 
 
 
 // ------------------------------ Message sending and Cache handling -----------
-function send(obj, msg) {
+function send(rcv, msg) {
 
-    if (isPrimitive(obj)) throw new Error("send: Unsupported message sending to primitives");
+    if (rcv === undefined || rcv === null) throw new Error("send: Unsupported message sending to " + rcv);
+
+    rcv = rcv.box();
 
     var args = Array.prototype.slice.call(arguments, 2);
-    var m = obj.get(msg);
+    var m = rcv.get(msg);
 
     if (!(m instanceof FunctionProxy)) {
-        throw new Error("Invalid message " + msg + " for " + obj);
+        throw new Error("Invalid message " + msg + " for " + rcv);
     }
-    return m.call.apply(m, [obj].concat(args));
+    return m.call.apply(m, [rcv].concat(args));
 }
 
 var global      = this;
@@ -969,11 +993,9 @@ var initState;
         var codeCacheName = "codeCache" + dataCache[0];
         var msg  = dataCache[1];
 
-        if (isPrimitive(rcv)) {
-            if (msg === "toString") return String(rcv);
-            else if (msg === "__get__" && args[0] === "length" && (typeof rcv) === "string") return rcv.length;
-            throw new Error("Cannot call method '" + msg + "' of " + rcv);
-        }
+        if (rcv === undefined || rcv === null) throw new Error("send: Unsupported message sending to " + rcv);
+
+        rcv = rcv.box();
 
         // TODO: Do not cache numerical messages!!!
         var method    = rcv.get(msg);
