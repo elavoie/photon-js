@@ -6,7 +6,14 @@ var options = {
 }
 var root = {};
 
+function isPrimitive(x) {
+    return x === null || x === undefined || (typeof x) === "number" || (typeof x) === "string" || (typeof x) === "boolean";
+}
+
 function send(obj, msg) {
+
+    if (isPrimitive(obj)) throw new Error("send: Unsupported message sending to primitives");
+
     var args = Array.prototype.slice.call(arguments, 2);
     var m = obj.get(msg);
 
@@ -71,7 +78,8 @@ function ProxyCreateWithPayload(payload) {
 }
 
 root.object = {
-    __proto__:null,
+    //__proto__:null, Do not set to null because V8 assumes certain properties provided on 
+    // Object.prototype
     payload:{__proto__:null},
     map:new ProxyMap(),
     newMap:null,
@@ -180,7 +188,8 @@ function ArraySetProp(obj, n, v) {
     if (obj.map.properties[n] !== undefined) {
         return obj.properties[n] = v;
     } else if (obj.map.siblings[n] !== undefined) {
-        obj.properties = {};
+        if (obj.properties === null) 
+            obj.properties = {};
         obj.map = obj.map.siblings[n];
         return obj.properties[n] = v;
     } else {
@@ -191,7 +200,8 @@ function ArraySetProp(obj, n, v) {
         newMap.properties[n] = true;
         obj.map.siblings[n] = newMap;
         obj.map = newMap;
-        obj.properties = {};
+        if (obj.properties === null)
+            obj.properties = {};
         return obj.properties[n] = v;
     }
 }
@@ -203,17 +213,10 @@ function ArrayProxySet(n, v) {
     } else if (n === "__proto__") {
         throw new Error("Unsupported modification of the __proto__ property");
     } else {
-        if (this !== root.array) {
-            //throw new Error("Unsupported assignation of regular properties on arrays");
-            /*
-            this.payload.__proto__ = this.__proto__.payload;
-            this.get = Proxy.prototype.get;
-            this.set = ArrayProxySetOpt;
-            */
-        }
         return ArraySetProp(this, n, v);
     }
 }
+/*
 function ArrayProxySetOpt(n, v) {
     if (n >= 0 && n < this.payload.length || (typeof n) === "number") {
         return this.payload[n] = v;
@@ -226,6 +229,7 @@ function ArrayProxySetOpt(n, v) {
     }
 
 }
+*/
 
 
 function FunctionProxyGet(n) {
@@ -302,6 +306,9 @@ extendProxy(root.function, {
     toString:function () {
         return "[Photon FunctionProxy]";
     },
+    code:function () {
+        return Function.prototype.toString.call(this.payload);
+    },
 
     call0:function (obj) {
         return this.payload(obj, this);
@@ -360,7 +367,8 @@ extendProxy(root.array, {
     get:ArrayProxyGet,
     set:ArrayProxySet,
     toString:function () {
-        return Array.prototype.join.call(this.payload, ",");
+        //return "[ArrayProxy [" + Array.prototype.join.call(this.payload, ",") + "]]";
+        return this.payload.join(",");
     },
 
     // Optimized methods
@@ -466,17 +474,15 @@ extend(root.object, {
     __new__:clos(function ($this, $closure, obj) {
         return obj;
     }, (function () {
-        /*
         // Ensure the f function is not considered a closure by V8
         // to allow inlining
         var f =  clos(new Function("$this", "dataCache", "obj",
             "if (dataCache[3] === $this.map) return obj;\n" + 
             "return bailout($this, dataCache, obj);"
         ));
-        */
         return clos(function ($this, $closure, rcv, method, args, dataCache) {
             if (options.verbose) print("Cached root.object.__new__"); 
-            return $this;
+            return f;
         });
     })()),
     __get__:clos(function ($this, $closure, name) {
@@ -547,7 +553,7 @@ extend(root.object, {
             if (!hasProp(ownedNames, name)) {
                 ownedNames[name] = clos(new Function ("$this", "dataCache", "name", "value",
                     "if ($this.map === dataCache[3]) return $this.payload."+name+" = value;\n" +
-                    "return bailout($this, dataCache, name);"
+                    "return bailout($this, dataCache, name, value);"
                 ));
             }
             return ownedNames[name];
@@ -560,7 +566,7 @@ extend(root.object, {
                     "if ($this.map === dataCache[3]) {\n" +
                     "    $this.map = $this.map.siblings[name];\n" +
                     "    return $this.payload."+name+" = value;\n" +
-                    "} return bailout($this, dataCache, name);"
+                    "} return bailout($this, dataCache, name, value);"
                 ));
             }
             return newNames[name];
@@ -581,7 +587,7 @@ extend(root.object, {
                     return updateProperty(name);
                 } else {
                     // Force creation of the next map
-                    getMap(rcv.map, [name]);
+                    //getMap(rcv.map, [name]);
                     return createProperty(name);
                 }
             } else {
@@ -632,7 +638,7 @@ extend(root.function, {
             "    var r   = $this.call1(obj, x0);\n" +
             "    return ((typeof r) === 'object' && r !== null) ? r : obj;\n" +
             "}\n" + 
-            "return bailout($this, dataCache);"
+            "return bailout($this, dataCache, x0);"
         ));
 
         var ctor2 = clos(new Function ("$this", "dataCache", "x0", "x1",
@@ -641,7 +647,7 @@ extend(root.function, {
             "    var r   = $this.call2(obj, x0, x1);\n" +
             "    return ((typeof r) === 'object' && r !== null) ? r : obj;\n" +
             "}\n" + 
-            "return bailout($this, dataCache);"
+            "return bailout($this, dataCache, x0, x1);"
         ));
 
         var ctor3 = clos(new Function ("$this", "dataCache", "x0", "x1", "x2",
@@ -650,7 +656,7 @@ extend(root.function, {
             "    var r   = $this.call3(obj, x0, x1, x2);\n" +
             "    return ((typeof r) === 'object' && r !== null) ? r : obj;\n" +
             "}\n" + 
-            "return bailout($this, dataCache);"
+            "return bailout($this, dataCache, x0, x1, x2);"
         ));
 
         return clos(function ($this, $closure) {
@@ -807,7 +813,9 @@ var initState;
         var codeCacheName = "codeCache" + dataCache[0];
         var msg  = dataCache[1];
 
-        if (rcv === undefined || rcv === null) {
+        if (isPrimitive(rcv)) {
+            if (msg === "toString") return String(rcv);
+            else if (msg === "length" && (typeof rcv) === "string") return rcv.length;
             throw new Error("Cannot call method '" + msg + "' of " + rcv);
         }
 
@@ -845,8 +853,19 @@ var initState;
     };
 })();
 
-function bailout($this, dataCache, name) {
-    throw new Error("BAILOUT!!!");
+function bailout(rcv, dataCache) {
+    if (rcv === undefined || rcv === null ) {
+        throw new Error("Invalid message for '" + rcv + "'");
+    } 
+    // Remove cache from invalidation set(s) and reset data cache
+    //tracker.removeCacheLinks("codeCache"+cacheData[0]);
+    global["codeCache"+dataCache[0]] = initState;
+    dataCache.length = 3;
+
+    if (options.verbose) print("Bailed out from codeCache" + dataCache[0]);
+
+    // Setup cache
+    return initState.apply(null, [rcv, dataCache].concat(Array.prototype.slice.call(arguments, 2)));
 }
 
 var root_global = extend(root.object.create(), {
@@ -952,7 +971,6 @@ var root_global = extend(root.object.create(), {
     "NaN":NaN
 });
 
-/*
 String.prototype.call = function () {
     throw new Error("TypeError: String primitive not a function");
 };
@@ -967,5 +985,14 @@ String.prototype.set = function (name, value) {
 String.prototype.__get__ = clos(function ($this, $closure, name) {
     return $this.get(name);
 });
-*/
 
+Number.prototype.call = function () {
+    throw new Error("TypeError: Number primitive not a function");
+};
+
+Number.prototype.get = function (name) {
+    throw new Error("Unsupported string property " + name);
+};
+Number.prototype.set = function (name, value) {
+    throw new Error("Unsupported set on primitive string values");
+};
