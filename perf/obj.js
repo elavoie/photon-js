@@ -443,8 +443,21 @@ extend(root.object, {
             }
             */
         });
-    })())
+    })()),
+
+    "isPrototypeOf":clos(function ($this, $closure, o) {
+        return Object.prototype.isPrototypeOf.call($this, o);
+    }),
 });
+root.object.set("constructor", extend(clos(function ($this, $closure) { 
+    if ($this === root_global) 
+        return root.object.create();
+    else 
+        return $this;
+}), {
+    "prototype":root.object,
+    "create":clos(function ($this, $closure, o) { return o.create(); }),
+}));
 
 extend(root.function, {
     "__ctor__":(function () {
@@ -627,32 +640,70 @@ root.array = extend(extendProxy(root.object.createWithPayloadAndMap([], new Prox
             }
         });
     })()),
-    /*
-    __set__:clos(function ($this, $closure, name, value) {
-        if ((typeof name) !== "number") {
-            throw new Error("Unsupported non-numerical update on arrays");
-            //TODO: Handle invalidation of caches
+    "concat":clos(function ($this, $closure) {
+        var args = Array.prototype.slice.call(arguments, 2);
+        return $this.payload.concat.apply($this.payload, args);
+    }),
+    "indexOf":clos(function ($this, $closure, searchValue, start) {
+        return $this.payload.indexOf(searchValue, start);
+    }),
+    "join":clos(function ($this, $closure, separator) {
+        return $this.payload.join(separator);
+    }),
+    "lastIndexOf":clos(function ($this, $closure, searchValue, start) {
+        return $this.payload.lastIndexOf(searchValue, start);
+    }),
+    "pop":clos(function ($this, $closure) {
+        return $this.payload.pop();
+    }),
+    "push":clos(function ($this, $closure, value) {
+        var args = Array.prototype.slice.call(arguments, 2);
+        return $this.payload.push.apply($this.payload, args);
+    }),
+    "reverse":clos(function ($this, $closure) {
+        $this.payload.reverse();
+        return $this;
+    }),
+    "shift":clos(function ($this, $closure) {
+        return $this.payload.shift();
+    }),
+    "slice":clos(function ($this, $closure, start, end) {
+        var r = $this.payload.slice(start, end);
+        return r === null ? r : arr(r);
+    }),
+    "sort":clos(function ($this, $closure, f) {
+        function wrapper(a, b) { return f.payload($this, f, a, b); }
+        if (f === undefined) {
+            $this.payload.sort();
+        } else {
+            $this.payload.sort(wrapper);
         }
-        return $this.set(name, value);
-    }, (function () {
-        var set = clos(new Function ("$this", "dataCache", "name", "value",
-            "if ($this.map === dataCache[3] && (typeof name) === 'number') return $this.set(name, value);\n" +
-            "return bailout($this, dataCache, name, value);"
-        ));
-        
-        return clos(function ($this, $closure, rcv, method, args, dataCache) {
-            var name = args.get(0);
-
-            if ((typeof name) === "number") {
-                return set;
-            } else { 
-                throw new Error("Unsupported caching of non-numerical update properties on arrays");
-            }
-        });
-    })())
-    */
+        return $this;
+    }),
+    "splice":clos(function ($this, $closure) {
+        var args = Array.prototype.slice.call(arguments, 2);
+        var r = $this.payload.splice.apply($this.payload, args);
+        return r === null ? r : arr(r);
+    }),
+    "toString":clos(function ($this, $closure) {
+        return $this.payload.toString();
+    }),
+    "unshift":clos(function ($this, $closure) {
+        var args = Array.prototype.slice.call(arguments, 2);
+        return $this.payload.unshift.apply($this.payload, args);
+    }),
+    "valueOf":clos(function ($this, $closure) {
+        return $this;
+    }),
 });
 var ArrayProxy = createFastConstructor(root.array);
+
+root.array.set("constructor", extend(clos(function ($this, $closure) {  
+    return new ArrayProxy(Array.apply([], Array.prototype.slice.call(arguments, 2)));
+}), {
+    "prototype":root.array
+}));
+
 
 
 var root_global = extend(root.object.create(), {
@@ -677,55 +728,8 @@ var root_global = extend(root.object.create(), {
     "parseFloat":clos(function ($this, $closure, s) { return parseFloat(s); }),
     "readFile":clos(function ($this, $closure, s) { return readFile(s); }),
 
-    "Object":extend(clos(function ($this, $closure) { 
-        if ($this === root_global) 
-            return root.object.create();
-        else 
-            return $this;
-    }), {
-        "prototype":extend(root.object, {
-            "isPrototypeOf":clos(function ($this, $closure, o) {
-                return Object.prototype.isPrototypeOf.call($this, o);
-            })
-        }),
-        "create":clos(function ($this, $closure, o) { return o.create(); }),
-    }),
-    "Array":extend(clos(function ($this, $closure) {  
-        return new ArrayProxy(Array.apply([], Array.prototype.slice.call(arguments, 2)));
-    }), {
-        "prototype":root.array
-    }),
-    "Date":extend(clos(function ($this, $closure) { 
-        return root.object.createWithPayload({"getTime":clos(function () { return null; })});
-        //return null; /new DateProxy(new Date()); 
-    }), {
-        /*
-        "prototype":extend(root.date, {
-            "getTime":clos(function ($this, $closure) {
-                if ($this === root.date) return NaN;
-
-                return Date.prototype.getTime.call($this.payload);    
-            })
-        }),
-        */
-    }),
-    "String":extend(clos(function ($this, $closure, s) { 
-        if ($this !== root_global && $this !== global) throw new Error("Unsupported string object");
-        return String(s);
-    }), {
-        // TODO: String prototype
-        "fromCharCode":clos(function ($this, $closure) {
-            return String.fromCharCode.apply(null, Array.prototype.slice.call(arguments, 2));    
-        })
-    }),
-    "Boolean":extend(clos(function () { throw new Error("Unsupported constructor"); }), {
-    }),
-    "Number":extend(clos(function () { throw new Error("Unsupported constructor"); }), {
-    }),
-    "RegExp":extend(clos(function () { throw new Error("Unsupported constructor"); }), {
-    }),
-    "Error":extend(clos(function () { throw new Error("Unsupported constructor"); }), {
-    }),
+    "Object":root.object.get("constructor"),
+    "Array":root.array.get("constructor"),
     "Math":extend(root.object.create(), {
         "E":Math.E,
         "LN2":Math.LN2,
@@ -755,9 +759,32 @@ var root_global = extend(root.object.create(), {
         "sqrt":clos(function ($this, $closure, x) { return Math.sqrt(x); }),
         "tan":clos(function ($this, $closure, x) { return Math.tan(x); })
     }),
-    "NaN":NaN
+    "Infinity":Infinity,
+    "NaN":NaN,
+    "undefined":undefined,
+    "escape":clos(function ($this, $closure, s) {
+        return escape(s);
+    }),
+    "isFinite":clos(function ($this, $closure, value) {
+        return isFinite(value);
+    }),
+    "isNaN":clos(function ($this, $closure, value) {
+        return isNaN(value);
+    }),
+    "parseFloat":clos(function ($this, $closure, s) {
+        return parseFloat(s);
+    }),
+    "parseInt":clos(function ($this, $closure, s, radix) {
+        return parseInt(s, radix);
+    }),
+    "unescape":clos(function ($this, $closure, s) {
+        return unescape(s);
+    }),
 });
 
+
+
+// ------------------------ Primitive values autoboxing ------------------------
 
 function PrimitiveProxyGet(n) {
     if (n === "length") {
@@ -770,8 +797,6 @@ function PrimitiveProxyGet(n) {
         }
     }
 }
-
-// ------------------------ Primitive values autoboxing ------------------------
 function PrimitiveProxySet(n, v) {
     if (n === "length") {
         return this.payload.n = v;
@@ -796,14 +821,72 @@ root.string = extend(extendProxy(root.object.createWithPayloadAndMap(String.prot
         toString:PrimitiveProxyToString,
         valueOf:PrimitiveProxyValueOf,
     }), {
+    "charAt":clos(function ($this, $closure, i) {
+        return $this.payload.charAt(i);
+    }),
+    "charCodeAt":clos(function ($this, $closure, i) {
+        return $this.payload.charCodeAt(i);
+    }),
+    "concat":clos(function ($this, $closure) {
+        var args = Array.prototype.slice.call(arguments, 2);
+        return $this.payload.concat.apply($this.payload, args);
+    }),
+    "indexOf":clos(function ($this, $closure, searchValue, start) {
+        return $this.payload.indexOf(searchValue, start);
+    }),
+    "lastIndexOf":clos(function ($this, $closure, searchValue, start) {
+        return $this.payload.lastIndexOf(searchValue, start);
+    }),
+    "match":clos(function ($this, $closure, regexp) {
+        var r = $this.payload.match(regexp);
+        if (r === null ) return r;
+        var a = arr(r);
+        a.set("index", r.index);
+        a.set("input", r.input);
+        return a;
+    }),
+    "replace":clos(function ($this, $closure, searchValue, newvalue) {
+        return $this.payload.replace(searchValue, newvalue);
+    }),
+    "search":clos(function ($this, $closure, searchValue) {
+        return $this.payload.search(searchValue);
+    }),
+    "slice":clos(function ($this, $closure, start, end) {
+        return $this.payload.slice(start, end);
+    }),
+    "split":clos(function ($this, $closure, separator, limit) {
+        var r = $this.payload.split(separator, limit);
+        return (r === null ) ? r : arr(r);
+    }),
+    "substr":clos(function ($this, $closure, start, length) {
+        return $this.payload.substr(start, length);
+    }),
+    "toLowerCase":clos(function ($this, $closure) {
+        return $this.payload.toLowerCase();
+    }),
+    "toUpperCase":clos(function ($this, $closure) {
+        return $this.payload.toUpperCase();
+    }),
     "toString":clos(function ($this, $closure) {
         return String($this);
     }),
-    "concat":clos(function ($this, $closure, s) {
-        return $this.payload.concat(s);
-    })
 });
 var StringProxy = createFastConstructor(root.string);
+
+root_global.set("String", extend(new FunctionProxy(function ($this, $closure, s) {
+    if ($this === root_global || $this === global) {
+        return String(s);
+    } else {
+        return new StringProxy(String(s));
+    }
+}), {
+    "fromCharCode":clos(function ($this, $closure) {
+        var args = Array.prototype.slice.call(arguments, 2);
+        return String.fromCharCode.apply(null, args);
+    }),
+    "prototype":root.string,
+}));
+root.string.set("constructor", root_global.get("String"));
 
 String.prototype.call = function () {
     throw new Error("TypeError: string primitive not a function");
@@ -824,11 +907,39 @@ root.number = extend(extendProxy(root.object.createWithPayloadAndMap(Number.prot
         toString:PrimitiveProxyToString,
         valueOf:PrimitiveProxyValueOf,
     }), {
-    "toString":clos(function ($this, $closure) {
-        return String($this);
+    "MAX_VALUE":Number.prototype.MAX_VALUE,
+    "MIN_VALUE":Number.prototype.MIN_VALUE,
+    "NEGATIVE_INFINITY":Number.prototype.NEGATIVE_INFINITY,
+    "NaN":Number.prototype.NaN,
+    "POSITIVE_INFINITY":Number.prototype.POSITIVE_INFINITY,
+    "toExponential":clos(function ($this, $closure, x) {
+        return $this.payload.toExponential(x);
+    }),
+    "toFixed":clos(function ($this, $closure, x) {
+        return $this.payload.toFixed(x);
+    }),
+    "toPrecision":clos(function ($this, $closure, x) {
+        return $this.payload.toPrecision(x);
+    }),
+    "toString":clos(function ($this, $closure, radix) {
+        return $this.payload.toString(radix);
+    }),
+    "valueOf":clos(function ($this, $closure) {
+        return $this.payload.valueOf();
     })
 });
 var NumberProxy = createFastConstructor(root.number);
+
+root_global.set("Number", extend(new FunctionProxy(function ($this, $closure, value) {
+    if ($this === root_global || $this === global) {
+        return Number(value);
+    } else {
+        return new NumberProxy(Number(value));
+    }
+}), {
+    "prototype":root.number,
+}));
+root.number.set("constructor", root_global.get("Number"));
 
 Number.prototype.call = function () {
     throw new Error("TypeError: number primitive not a function");
@@ -851,9 +962,24 @@ root.boolean = extend(extendProxy(root.object.createWithPayloadAndMap(Boolean.pr
     }), {
     "toString":clos(function ($this, $closure) {
         return String($this);
+    }),
+    "valueOf":clos(function ($this, $closure) {
+        return $this.payload.valueOf();
     })
 });
 var BooleanProxy = createFastConstructor(root.boolean);
+
+root_global.set("Boolean", extend(new FunctionProxy(function ($this, $closure, bool) {
+    if ($this === root_global || $this === global) {
+        return Boolean(bool);
+    } else {
+        return new BooleanProxy(Boolean(s));
+    }
+}), {
+    "prototype":root.boolean,
+}));
+root.boolean.set("constructor", root_global.get("Boolean"));
+
 Boolean.prototype.call = function () {
     throw new Error("TypeError: boolean primitive not a function");
 };
@@ -868,16 +994,68 @@ Boolean.prototype.box = function () {
 };
 
 root.regexp = extend(extendProxy(root.object.createWithPayloadAndMap(RegExp.prototype, new ProxyMap()), {
-        get:PrimitiveProxyGet,
-        set:PrimitiveProxySet,
+        get:function (n) {
+            if (n === "length") {
+                return this.getLength();
+            } else {
+                if (hasProp(this.map.properties, n)) {
+                    return this.properties[n];
+                } else if (n === "lastIndex"  || 
+                           n === "ignoreCase" || 
+                           n === "global"     || 
+                           n === "multiline"  || 
+                           n === "source") {
+                    return this.payload[n];
+                } else {
+                    return this.__proto__.get(n);
+                }
+            }
+        },
+        set:function (n, v) {
+            if (n === "lastIndex"  || 
+                n === "ignoreCase" || 
+                n === "global"     || 
+                n === "multiline"  || 
+                n === "source") {
+                return this.payload[n] = v;
+            } else if (n === "__proto__") {
+                throw new Error("Unsupported modification of the __proto__ property");
+            } else {
+                return ArraySetProp(this, n, v);
+            }
+        },
         toString:PrimitiveProxyToString,
         valueOf:PrimitiveProxyValueOf,
     }), {
     "toString":clos(function ($this, $closure) {
         return String($this);
+    }),
+    "exec":clos(function ($this, $closure, s) {
+        var r = $this.payload.exec(s);
+        if (r === null ) return r;
+        var a = arr(r);
+        a.set("index", r.index);
+        a.set("input", r.input);
+        return a;
+    }),
+    "test":clos(function ($this, $closure, s) {
+        var r = $this.payload.exec(s);
+        return r === null ? r : arr(r);
     })
 });
 var RegExpProxy = createFastConstructor(root.regexp);
+
+root_global.set("RegExp", extend(new FunctionProxy(function ($this, $closure, regexp) {
+    if ($this === root_global || $this === global) {
+        return RegExp(regexp);
+    } else {
+        return new RegExpProxy(RegExp(regexp));
+    }
+}), {
+    "prototype":root.regexp,
+}));
+root.regexp.set("constructor", root_global.get("RegExp"));
+
 RegExp.prototype.call = function () {
     throw new Error("TypeError: regexp primitive not a function");
 };
@@ -899,9 +1077,25 @@ root.date = extend(extendProxy(root.object.createWithPayloadAndMap(Date.prototyp
     }), {
     "toString":clos(function ($this, $closure) {
         return String($this);
-    })
+    }),
+    "getTime":clos(function ($this, $closure) {
+        return $this.payload.getTime();
+    }),
 });
 var DateProxy = createFastConstructor(root.date);
+
+root_global.set("Date", extend(new FunctionProxy(function ($this, $closure) {
+    var args = Array.prototype.slice.call(arguments, 2);
+    if ($this === root_global || $this === global) {
+        return Date.apply(null, args);
+    } else {
+        return new DateProxy(Date.apply(null, args));
+    }
+}), {
+    "prototype":root.date,
+}));
+root.date.set("constructor", root_global.get("Date"));
+
 Date.prototype.call = function () {
     throw new Error("TypeError: date primitive not a function");
 };
@@ -926,6 +1120,18 @@ root.error = extend(extendProxy(root.object.createWithPayloadAndMap(Error.protot
     })
 });
 var ErrorProxy = createFastConstructor(root.error);
+
+root_global.set("Error", extend(new FunctionProxy(function ($this, $closure, s) {
+    if ($this === root_global || $this === global) {
+        return Error(s);
+    } else {
+        return new ErrorProxy(Error(s));
+    }
+}), {
+    "prototype":root.error,
+}));
+root.error.set("constructor", root_global.get("Error"));
+
 Error.prototype.call = function () {
     throw new Error("TypeError: error primitive not a function");
 };

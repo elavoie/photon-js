@@ -1262,7 +1262,7 @@ extend(root.regexp, obj(root.object, {code:RegExp.prototype}, {
         var r = $this.payload.code(s);
         return r === null ? r : arr(r);
     }),
-    "exec":bs_clos(function ($this, $closure, obj, s) {
+    "exec":bs_clos(function ($this, $closure, s) {
         var r = $this.payload.code.exec(s);
         return r === null ? r : arr(r);
     }),
