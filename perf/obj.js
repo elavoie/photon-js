@@ -1,3 +1,8 @@
+// ------------------------------------------------------------------------------------------
+// All global variables with the following prefixes are reserved for the run-time system:
+// - 'codeCache'
+// - 'dataCache'
+// - 'forInVar'
 // ------------------------------ Helper functions and options ------------------------------
 var options = {
     verbose:false,
@@ -143,6 +148,17 @@ function ensureCallMethodForArgNb(nb) {
     }
 }
 
+function getTypeof(x) {
+    var t = typeof x;
+    if (t !== "object" || x === null) return t;
+    else return x.type();
+}
+
+function getIterable(x) {
+    if (x === undefined || x === null) return x;
+    else return x.iterable();
+}
+
 // ------------------------ Core Object Representation (Object and Function) --
 // Forward declaratin
 function FunctionProxy() {}
@@ -216,6 +232,12 @@ root.object = {
     toString:function () {
         return "[Photon Proxy]";
     },
+    type:function () {
+        return "object";
+    },
+    iterable:function () {
+        return this.payload;
+    },
 
     // Optimized methods
     getLength:function (dataCache) {
@@ -286,8 +308,12 @@ extendProxy(root.function, {
         var args = Array.prototype.slice.call(arguments, 1);
         return Function.prototype.apply.call(this.payload, null, [obj, this].concat(args));
     },
+    iterable:function () { return this.payload; },
     toString:function () {
         return "[Photon FunctionProxy]";
+    },
+    type:function () {
+        return "function";
     },
     code:function () {
         return Function.prototype.toString.call(this.payload);
@@ -597,10 +623,14 @@ function ArraySetProp(obj, n, v) {
 
 root.array = extend(extendProxy(root.object.createWithPayloadAndMap([], new ProxyMap), {
     get:ArrayProxyGet,
+    iterable:function () {
+        if (this.map !== root.array.newMap) throw new Error("Unimplemented iterable for arrays with properties");
+        return this.payload;
+    },
     set:ArrayProxySet,
     toString:function () {
         //return "[ArrayProxy [" + Array.prototype.join.call(this.payload, ",") + "]]";
-        return this.payload.join(",");
+        return send(this, "toString");
     },
 
     // Optimized methods
@@ -703,7 +733,7 @@ root.array = extend(extendProxy(root.object.createWithPayloadAndMap([], new Prox
         return r === null ? r : arr(r);
     }),
     "toString":clos(function ($this, $closure) {
-        return $this.payload.toString();
+        return $this.payload.join(",");
     }),
     "unshift":clos(function ($this, $closure) {
         var args = Array.prototype.slice.call(arguments, 2);
@@ -832,8 +862,13 @@ function PrimitiveProxyValueOf() {
     return this.payload.valueOf();
 }
 
+function PrimitiveProxyIterable() {
+    throw new Error("Unimplemented iterable");
+}
+
 root.string = extend(extendProxy(root.object.createWithPayloadAndMap(String.prototype, new ProxyMap()), {
         get:PrimitiveProxyGet,
+        iterable:PrimitiveProxyIterable,
         set:PrimitiveProxySet,
         toString:PrimitiveProxyToString,
         valueOf:PrimitiveProxyValueOf,
@@ -862,8 +897,15 @@ root.string = extend(extendProxy(root.object.createWithPayloadAndMap(String.prot
         a.set("input", r.input);
         return a;
     }),
-    "replace":clos(function ($this, $closure, searchValue, newvalue) {
-        return $this.box().payload.replace(searchValue, newvalue);
+    "replace":clos(function ($this, $closure, searchValue, newValue) {
+        if (newValue instanceof FunctionProxy) {
+            var v = function (x) {
+                return newValue.call1(root_global, x);
+            };
+        } else {
+            v = newValue;
+        }
+        return $this.box().payload.replace(searchValue, v);
     }),
     "search":clos(function ($this, $closure, searchValue) {
         return $this.box().payload.search(searchValue);
@@ -889,6 +931,9 @@ root.string = extend(extendProxy(root.object.createWithPayloadAndMap(String.prot
     }),
 });
 var StringProxy = createFastConstructor(root.string);
+
+// Because call1 is used in replace
+ensureCallMethodForArgNb(1);
 
 root_global.set("String", extend(new FunctionProxy(function ($this, $closure, s) {
     if ($this === root_global || $this === global) {
@@ -920,9 +965,13 @@ String.prototype.set = function (name, value) {
 String.prototype.box = function () {
     return new StringProxy(this);
 };
+String.prototype.type = function () {
+    return "object";
+};
 
 root.number = extend(extendProxy(root.object.createWithPayloadAndMap(Number.prototype, new ProxyMap()), {
         get:PrimitiveProxyGet,
+        iterable:PrimitiveProxyIterable,
         set:PrimitiveProxySet,
         toString:PrimitiveProxyToString,
         valueOf:PrimitiveProxyValueOf,
@@ -973,9 +1022,13 @@ Number.prototype.set = function (name, value) {
 Number.prototype.box = function () {
     return new NumberProxy(this);
 };
+Number.prototype.type = function () {
+    return "object";
+};
 
 root.boolean = extend(extendProxy(root.object.createWithPayloadAndMap(Boolean.prototype, new ProxyMap()), {
         get:PrimitiveProxyGet,
+        iterable:PrimitiveProxyIterable,
         set:PrimitiveProxySet,
         toString:PrimitiveProxyToString,
         valueOf:PrimitiveProxyValueOf,
@@ -1011,6 +1064,9 @@ Boolean.prototype.set = function (name, value) {
 };
 Boolean.prototype.box = function () {
     return new BooleanProxy(this);
+};
+Boolean.prototype.type = function () {
+    return "object";
 };
 
 root.regexp = extend(extendProxy(root.object.createWithPayloadAndMap(RegExp.prototype, new ProxyMap()), {
@@ -1088,9 +1144,13 @@ RegExp.prototype.set = function (name, value) {
 RegExp.prototype.box = function () {
     return new RegExpProxy(this);
 };
+RegExp.prototype.type = function () {
+    return "object";
+};
 
 root.date = extend(extendProxy(root.object.createWithPayloadAndMap(Date.prototype, new ProxyMap()), {
         get:PrimitiveProxyGet,
+        iterable:PrimitiveProxyIterable,
         set:PrimitiveProxySet,
         toString:PrimitiveProxyToString,
         valueOf:PrimitiveProxyValueOf,
@@ -1124,9 +1184,13 @@ Date.prototype.set = function (name, value) {
 Date.prototype.box = function () {
     return new DateProxy(this);
 };
+Date.prototype.type = function () {
+    return "object";
+};
 
 root.error = extend(extendProxy(root.object.createWithPayloadAndMap(Error.prototype, new ProxyMap()), {
         get:PrimitiveProxyGet,
+        iterable:PrimitiveProxyIterable,
         set:PrimitiveProxySet,
         toString:PrimitiveProxyToString,
         valueOf:PrimitiveProxyValueOf,
@@ -1159,6 +1223,9 @@ Error.prototype.set = function (name, value) {
 };
 Error.prototype.box = function () {
     return new ErrorProxy(this);
+};
+Error.prototype.type = function () {
+    return "object";
 };
 
 
@@ -1270,3 +1337,5 @@ function bailout(rcv, dataCache) {
 
 // ------------------------------ Tracking mecanism for cache invalidation ----
 // TODO
+
+

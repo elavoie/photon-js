@@ -1,4 +1,4 @@
-d8 ../photon/source/deps/ometa-js/lib.js                     \
+../photon/source/deps/v8-bkp/d8 ../photon/source/deps/ometa-js/lib.js                     \
    ../photon/source/deps/ometa-js/ometa-base.js              \
    ../photon/source/deps/ometa-js/parser.js                  \
    ../photon/source/deps/ometa-js/bs-js-compiler.js          \

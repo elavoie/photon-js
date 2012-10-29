@@ -566,13 +566,15 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                     .concat([[#get, a]])]},
   */
   unop     ( 'typeof' [#get 'window']                         -> [#string, "undefined"] 
-           | 'typeof' trans:x                                 -> [#send, "__typeof__",  x]
+           //| 'typeof' trans:x                                 -> [#send, "__typeof__",  x]
            | 'delete' ( [#getp trans:x trans:f]               -> [#send, "__delete__",  x, f]
                       | [#get :n]                             -> [#get, #false])
            | ^unop), 
+  /*
   binop    ( 'instanceof' trans:x trans:y                     -> [#send, "__instanceof__", x, y]
            | 'in'         trans:x trans:y                     -> [#send, "__in__", y, x]
            | ^binop),
+  */
   getp     trans:x trans:fd                                   -> [#send, "__get__", x, fd],
   mset     ( ([#getp trans:rcv trans:fd]):lhs :op trans:rhs   -> {var id_rcv = gensym(); var id_fd = gensym();
                                                                   [#let, _new_context(),
@@ -633,6 +635,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                     [#begin,
                                                                         [#set, x, [#binop, op, [#get, id], [#number, 1]]],
                                                                         [#get, id]]]}),  
+  /*
   forIn     ( [#get :name] 
             | [#var :name [#get #undefined]] -> {self.context.declare(name)}) 
             trans:arr trans:body                              -> {var it = gensym();
@@ -646,6 +649,10 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                                 .concat([body])
                                                                                 .concat([[#send, "next", [#get, it]]])],
                                                                         [#get, "undefined"]]]},
+  */
+  forIn    ( [#var :name [#get #undefined]] -> {self.context.declare(name)}
+           | [#get :name])
+           trans:arr trans:body                               -> [#forIn, [#get, name], arr, body],
   new      trans:fn trans*:args                               -> [#send, "__ctor__", fn].concat(args),
   /*
   json     trans*:props                                       -> {var o = gensym();
@@ -844,6 +851,17 @@ ometa PhotonVarScopeBinding <: PhotonASTCopy {
                                                                       */
                                                                       [#func, args, ctxt, body];
                                                                      },
+  forIn ( [#get :id] ({self.context.scope.lookup(id);}):x ?{x.is_global()} 
+         trans:arr trans:body                                     -> {var forInVarName = "forInVar" + PhotonVarScopeBinding.forInVarCount++;
+                                                                     [#forIn, 
+                                                                        [#get, forInVarName], 
+                                                                        arr, 
+                                                                        [#begin, [#send, "__set__", 
+                                                                                         [#ref, "root_global"], [#string, id], 
+                                                                                         [#get, forInVarName]]
+                                                                        ].concat([body])];
+                                                                    }
+       | ^forIn),
   try :ctxt trans:x :name 
             {self.context.enter_let_scope(ctxt.scope)} 
             {self.context.scope._escaping}:es
@@ -857,6 +875,7 @@ ometa PhotonVarScopeBinding <: PhotonASTCopy {
             trans:body 
             {self.context.leave_let_scope(ctxt.scope)}           -> [#let, ctxt, [#begin].concat(vs), body]
 }
+PhotonVarScopeBinding.forInVarCount = 0;
 
 PhotonVarScopeBinding.initialize = function ()
 {
@@ -1107,7 +1126,8 @@ ometa PhotonJSCodeGen {
   number   :n                                                      -> String(n),
   regexp   :str_e                                                  -> ("(" + str_e + ")"),
   string   :s                                                      -> s.toProgramString(),
-  unop     :op trans:x                                             -> ("(" + op + " " +  x + ")"),
+  unop     ( 'typeof' trans:x                                      -> ("(getTypeof(" + x + "))")
+           | :op      trans:x                                      -> ("(" + op + " " +  x + ")")),
   get      "arguments"                                             -> ("$arguments"),
   get      :x                                                      -> x,
   getCell  :x                                                      -> ("(" + x + ".payload)"),
@@ -1117,7 +1137,9 @@ ometa PhotonJSCodeGen {
   closureRefValue trans:fn trans:offset                            -> ("(" + fn + ".payload.cells[" + offset + "].payload)"),
   set      [#closureRefValue trans:fn trans:offset] trans:rhs      -> ("(" + fn + ".payload.cells[" + offset + "].payload = " + rhs + ")"),
   set      trans:lhs trans:rhs                                     -> ("(" + lhs +  " = " +  rhs + ")"),
-  binop    :op trans:x trans:y                                     -> ("(" + x +  " " +  op +  " " +  y + ")"),
+  binop    ( ('in' 
+             | 'instanceof'):op trans:x trans:y                    -> ("(" + x +  " " +  op +  " getIterable(" + y + "))") 
+           | :op  trans:x trans:y                                  -> ("(" + x +  " " +  op +  " " +  y + ")")),
   return   trans:x                                                 -> ("return " +  x),
   with     trans:x block:s                                         -> ("with (" +  x +  ")\n" +  s),
   if       trans:cond block:t block:e                              -> ("if (" +  cond +  ")\n" + t + " else\n" + e),
@@ -1125,6 +1147,7 @@ ometa PhotonJSCodeGen {
   while    trans:cond block:body                                   -> ("while (" +  cond +  ")\n" +  body),
   doWhile  block:body trans:cond                                   -> ("do \n" +  body +  "while (" +  cond +  ")"),
   for      exprList:init trans:cond exprList:upd block:body        -> ("for (" +  init +  "; " +  cond +  "; " +  upd +  ")\n" +  body),
+  forIn    trans:x trans:arr block:body                            -> ("for (" +  x +  " in getIterable(" +  arr +  "))\n" +  body),
   begin    flat:stmts                                              -> stmts,
   func     :args :ctxt block:body                                  -> ("(new FunctionProxy(function (" + ["$this", "$closure"].concat(args).join(",") +  ")\n" + body + "))"),
   call     trans:fn trans*:args                                    -> { var n = gensym();
