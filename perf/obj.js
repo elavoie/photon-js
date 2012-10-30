@@ -258,10 +258,13 @@ root.object = {
         return v;
     },
     toString:function () {
-        return "[Photon Proxy]";
+        return this.get("toString").call(this);
     },
     type:function () {
         return "object";
+    },
+    valueOf:function () {
+        return this.get("valueOf").call(this);
     },
     iterable:function () {
         return this.payload;
@@ -304,6 +307,9 @@ function FunctionProxySet(n, v) {
         this.payload.__proto__ = this.__proto__.payload; 
         this.get = FunctionProxyGetOpt;
         this.set = FunctionProxySetOpt;
+        if (n !== "prototype") {
+            this.set("prototype", root.object.create());
+        }
     }
     if (n !== "length")
         return setProp(this, n, v);
@@ -514,6 +520,12 @@ extend(root.object, {
     "isPrototypeOf":clos(function ($this, $closure, o) {
         return Object.prototype.isPrototypeOf.call($this, o);
     }),
+    "toString":clos(function ($this, $closure) {
+        return "[object Object]";
+    }),
+    "valueOf":clos(function ($this, $closure) {
+        return $this;
+    }),
 });
 root.object.setWithOptions("constructor", extend(clos(function ($this, $closure) { 
     if ($this === root_global) 
@@ -524,6 +536,9 @@ root.object.setWithOptions("constructor", extend(clos(function ($this, $closure)
     "prototype":root.object,
     "create":clos(function ($this, $closure, o) { return o.create(); }),
 }), {enumerable:false});
+
+function Proxy() { throw new Error("Unsupported Proxy construction"); }
+Proxy.prototype = root.object;
 
 extend(root.function, {
     "__ctor__":(function () {
@@ -665,7 +680,7 @@ function ArraySetProp(obj, n, v) {
 root.array = extendProxy(root.object.createWithPayloadAndMap([], new ProxyMap), {
     get:ArrayProxyGet,
     has:function (p) {
-        if (p >= 0 && p < this.payload.length || (typeof p) === "string" || p === "length") {
+        if (p >= 0 && p < this.payload.length || (typeof p) === "number" || p === "length") {
             return Object.hasOwnProperty.call(this.payload, p); 
         } else {
             return this.map.properties[p] === true;
@@ -887,6 +902,66 @@ var root_global = extend(root.object.create(), {
     }),
 });
 
+var $this = root.global;
+
+root.arguments = extendProxy(root.object.createWithPayloadAndMap([], new ProxyMap), {
+    get:function (n) {
+        if (n >= 0 && n < this.getLength()) {
+            return this.payload[n+2];
+        } else if (n === "length") {
+            return this.getLength();
+        } else {
+            if (hasProp(this.map.properties, n)) {
+                return this.properties[n];
+            } else {
+                return this.__proto__.get(n);
+            }
+        }
+    },
+    getLength:function () {
+        return this.payload.length - 2;
+    },
+    has:function (p) {
+        if (p >= 0 && p < this.getLength() || (typeof p) === "number" || p === "length") {
+            return Object.hasOwnProperty.call(this.payload, p); 
+        } else {
+            return this.map.properties[p] === true;
+        }
+    },
+    iterable:function () {
+        if (this.map !== root.arguments.newMap) throw new Error("Unimplemented iterable for arrays with properties");
+        return Array.prototype.slice.call(this.payload, 2);
+    },
+    set:function (n,v) {
+        if (n >= 0 && n < this.payload.length || (typeof n) === "number") {
+            return this.payload[n+2] = v;
+        } else if (n === "length") {
+            return this.payload.length = v;
+        } else if (n === "__proto__") {
+            throw new Error("Unsupported modification of the __proto__ property");
+        } else {
+            return ArraySetProp(this, n, v);
+        }
+    },
+    // Optimized methods
+    getNum:function (dataCache, n) {
+        if (n >= 0 && n < this.getLength())
+            return this.payload[n+2];
+        else 
+            return this.get(n);
+    },
+});
+
+extend(root.arguments, {
+    "toString":clos(function ($this, $closure) {
+        return "[object Arguments]";
+    }),
+    "valueOf":clos(function ($this, $closure) {
+        return Array.prototype.slice.call(this.payload, 2);
+    }),
+});
+
+var ArgumentsProxy = createFastConstructor(root.arguments);
 
 
 // ------------------------ Primitive values autoboxing ------------------------
@@ -913,7 +988,7 @@ function PrimitiveProxySet(n, v) {
 }
 
 function PrimitiveProxyToString() {
-    return this.payload.toString();
+    return this.unbox().toString();
 }
 
 function PrimitiveProxyUnbox() {
@@ -921,7 +996,7 @@ function PrimitiveProxyUnbox() {
 }
 
 function PrimitiveProxyValueOf() {
-    return this.payload.valueOf();
+    return this.unbox().valueOf();
 }
 
 function PrimitiveProxyIterable() {
@@ -1308,8 +1383,18 @@ root.date = extend(extendProxy(root.object.createWithPayloadAndMap(Date.prototyp
 var DateProxy = createFastConstructor(root.date);
 
 root_global.set("Date", extend(new FunctionProxy(function ($this, $closure, x0, x1, x2, x3, x4, x5, x6) {
-    var args = Array.prototype.slice.call(arguments, 2);
-    return new DateProxy(new Date(x0, x1, x2, x3, x4, x5, x6));
+    var payload;
+    switch(arguments.length - 2) {
+        case 0: payload = new Date(); break;
+        case 1: payload = new Date(x0); break;
+        case 2: payload = new Date(x0,x1); break;
+        case 3: payload = new Date(x0,x1,x2); break;
+        case 4: payload = new Date(x0,x1,x2,x3); break;
+        case 5: payload = new Date(x0,x1,x2,x3,x4); break;
+        case 6: payload = new Date(x0,x1,x2,x3,x4,x5); break;
+        case 7: payload = new Date(x0,x1,x2,x3,x4,x5,x6); break;
+    }
+    return new DateProxy(payload);
 }), {
     "prototype":root.date,
 }));

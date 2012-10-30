@@ -849,7 +849,11 @@ ometa PhotonVarScopeBinding <: PhotonASTCopy {
                                                                       }
                                                                       fun;
                                                                       */
-                                                                      [#func, args, ctxt, body];
+                                                                      var newBody = [#begin]
+                                                                      .concat([body[1]])
+                                                                      .concat(self.context.gen_arguments(args.length, ctxt.scope))
+                                                                      .concat(body.slice(2));
+                                                                      [#func, args, ctxt, newBody];
                                                                      },
   forIn ( [#get :id] ({self.context.scope.lookup(id);}):x ?{x.is_global()} 
          trans:arr trans:body                                     -> {var forInVarName = "forInVar" + PhotonVarScopeBinding.forInVarCount++;
@@ -969,6 +973,8 @@ PhotonVarScopeBinding.context =
     {
         if (scope.useArguments)
         {
+            return [[#set, [#get, "$arguments"], [#wrapExpr, "(new ArgumentsProxy(", "))", [#get, "arguments"]]]];
+            /*
             var i = gensym(), c = gensym(); length = gensym(); args = gensym();
 
             function args_get(index)
@@ -995,6 +1001,7 @@ PhotonVarScopeBinding.context =
                         ["begin",
                             ["set", args_get(["get", i]), ["send", "__new__", ["ref", "root.cell"], args_get(["get", i])]]]],
                      ["get", "undefined"]]]];
+              */
         } else
         {
             return [];
