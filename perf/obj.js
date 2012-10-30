@@ -9,8 +9,16 @@ var options = {
     use_ic:true,
     trace_ic:false,
     trace_ic_tracker:false
-}
+};
 var root = {};
+var nonEnumerable = {
+    __ctor__:true,
+    __get__:true,
+    __memoize__:true,
+    __new__:true,
+    __set__:true,
+    constructor:true,
+};
 
 function isPrimitive(x) {
     return x === null || x === undefined || (typeof x) === "number" || (typeof x) === "string" || (typeof x) === "boolean";
@@ -18,8 +26,12 @@ function isPrimitive(x) {
 
 function extend(obj, props) {
     for (var p in props) {
-        if (props.hasOwnProperty(p)) {
-            obj.set(p, props[p]);
+        if (hasProp(props, p)) {
+            if (p in nonEnumerable) {
+                obj.setWithOptions(p, props[p], {enumerable:false});
+            } else {
+                obj.set(p, props[p]);
+            }
         }
     }
     return obj;
@@ -218,6 +230,9 @@ root.object = {
     get:function (n) {
         return this.payload[n];
     },
+    has:function (p) {
+        return this.map.properties[p] === true;
+    },
     set:function (n, v) {
         // These checks guarantee the correct return value
         // when accessing array properties that were never assigned
@@ -228,6 +243,19 @@ root.object = {
         }
 
         return setProp(this, n, v);
+    },
+    setWithOptions:function (n, v, options) {
+        // These checks guarantee the correct return value
+        // when accessing array properties that were never assigned
+        if (n === "__proto__") {
+            throw new Error("Unsupported modification of the __proto__ property");
+        } else if ((typeof n) === "number") {
+            throw new Error("Unsupported assignation of numerical properties");
+        }
+
+        var v = setProp(this, n, v);
+        Object.defineProperty(this.payload, n, options);
+        return v;
     },
     toString:function () {
         return "[Photon Proxy]";
@@ -302,8 +330,15 @@ FunctionProxy = createFastConstructor(root.function);
 
 extendProxy(root.function, {
     get:FunctionProxyGet,
+    has:function (p) {
+        return this.map.properties[p] === true;
+    },
     set:FunctionProxySet,
-    
+    setWithOptions:function (n, v, options) { 
+        var v = this.set(n,v);
+        Object.defineProperty(this.payload, n, options);
+        return v;
+    },
     call:function (obj) {
         var args = Array.prototype.slice.call(arguments, 1);
         return Function.prototype.apply.call(this.payload, null, [obj, this].concat(args));
@@ -333,7 +368,7 @@ extend(root.object, {
             "return bailout($this, dataCache, obj);"
         ));
         return clos(function ($this, $closure, rcv, method, args, dataCache) {
-            if (options.verbose) print("Cached root.object.__new__"); 
+            if (options.verbose) print("Cached root.object.__new__ at " + dataCache.get(0)); 
             return f;
         });
     })()),
@@ -375,8 +410,11 @@ extend(root.object, {
                     if (options.verbose) print("Caching __get__ length at " + dataCache.get(0));
                     return getLength;
                 } else {
-                    if (options.verbose) print("Caching __get__ " + name + " at " + dataCache.get(0));
-                    return getName(args.get(0));
+                    // TODO: Dynamically add the new methods on the root object and all prototypes
+                    //       for primitive data types
+                    //if (options.verbose) print("Caching __get__ " + name + " at " + dataCache.get(0));
+                    //return getName(args.get(0));
+                    return get;
                 }
             } else {
                 if (options.verbose) print("Caching __get__ at " + dataCache.get(0));
@@ -470,12 +508,14 @@ extend(root.object, {
             */
         });
     })()),
-
+    "hasOwnProperty":clos(function ($this, $closure, p) {
+        return $this.has(p);
+    }),
     "isPrototypeOf":clos(function ($this, $closure, o) {
         return Object.prototype.isPrototypeOf.call($this, o);
     }),
 });
-root.object.set("constructor", extend(clos(function ($this, $closure) { 
+root.object.setWithOptions("constructor", extend(clos(function ($this, $closure) { 
     if ($this === root_global) 
         return root.object.create();
     else 
@@ -483,7 +523,7 @@ root.object.set("constructor", extend(clos(function ($this, $closure) {
 }), {
     "prototype":root.object,
     "create":clos(function ($this, $closure, o) { return o.create(); }),
-}));
+}), {enumerable:false});
 
 extend(root.function, {
     "__ctor__":(function () {
@@ -560,7 +600,8 @@ extend(root.function, {
         });
     })()),
     "apply":clos(function ($this, $closure, obj, args) {
-        return Function.prototype.apply.call($this.payload, null, [obj, $this].concat(args));
+        if (!(args instanceof ArrayProxy)) throw new Error("apply: Invalid array of arguments");
+        return Function.prototype.apply.call($this.payload, null, [obj, $this].concat(args.payload));
     }),
     "__memoize__":clos(function ($this, $closure, rcv, method, args, dataCache) {
         return null;
@@ -621,13 +662,29 @@ function ArraySetProp(obj, n, v) {
 }
 
 
-root.array = extend(extendProxy(root.object.createWithPayloadAndMap([], new ProxyMap), {
+root.array = extendProxy(root.object.createWithPayloadAndMap([], new ProxyMap), {
     get:ArrayProxyGet,
+    has:function (p) {
+        if (p >= 0 && p < this.payload.length || (typeof p) === "string" || p === "length") {
+            return Object.hasOwnProperty.call(this.payload, p); 
+        } else {
+            return this.map.properties[p] === true;
+        }
+    },
     iterable:function () {
         if (this.map !== root.array.newMap) throw new Error("Unimplemented iterable for arrays with properties");
         return this.payload;
     },
     set:ArrayProxySet,
+    setWithOptions:function (n, v, options) { 
+        if (this !== root.array || 
+            (n >= 0 && n < this.payload.length) || 
+            (typeof n) === "number") throw new Error("Invalid setWithOptions"); 
+
+        var v = this.set(n,v);
+        Object.defineProperty(this.properties, n, options);
+        return v;
+    },
     toString:function () {
         //return "[ArrayProxy [" + Array.prototype.join.call(this.payload, ",") + "]]";
         return send(this, "toString");
@@ -640,7 +697,8 @@ root.array = extend(extendProxy(root.object.createWithPayloadAndMap([], new Prox
         else 
             return this.get(n);
     },
-}), {
+});
+extend(root.array, {
     __get__:clos(function ($this, $closure, name) {
         return $this.get(name);
     }, (function () {
@@ -745,11 +803,11 @@ root.array = extend(extendProxy(root.object.createWithPayloadAndMap([], new Prox
 });
 var ArrayProxy = createFastConstructor(root.array);
 
-root.array.set("constructor", extend(clos(function ($this, $closure) {  
+root.array.setWithOptions("constructor", extend(clos(function ($this, $closure) {  
     return new ArrayProxy(Array.apply([], Array.prototype.slice.call(arguments, 2)));
 }), {
     "prototype":root.array
-}));
+}), {enumerable:false});
 
 
 
@@ -766,7 +824,7 @@ var root_global = extend(root.object.create(), {
         throw new Error("ReferenceError: " + msg + " is not defined");
     }),
 
-    "print":clos(function ($this, $closure, s) { print(s); }),
+    "print":clos(function ($this, $closure, s) { if (arguments.length === 2) print(); else print(s); }),
     "run":clos(function ($this, $closure, s) { return run(s); }),
     "gc":clos(function ($this, $closure) { gc(); }),
     "eval":clos(function ($this, $closure, s) { return eval(compile(s)); }),
@@ -858,6 +916,10 @@ function PrimitiveProxyToString() {
     return this.payload.toString();
 }
 
+function PrimitiveProxyUnbox() {
+    return this.payload;
+}
+
 function PrimitiveProxyValueOf() {
     return this.payload.valueOf();
 }
@@ -867,30 +929,48 @@ function PrimitiveProxyIterable() {
 }
 
 root.string = extend(extendProxy(root.object.createWithPayloadAndMap(String.prototype, new ProxyMap()), {
-        get:PrimitiveProxyGet,
+        get:function PrimitiveProxyGet(n) {
+            if (n === "length") {
+                return this.getLength();
+            } else if (n >= 0 && n < this.getLength() || (typeof n) === "number") {
+                return this.payload[n];
+            } else {
+                if (hasProp(this.map.properties, n)) {
+                    return this.properties[n];
+                } else {
+                    return this.__proto__.get(n);
+                }
+            }
+        },
         iterable:PrimitiveProxyIterable,
         set:PrimitiveProxySet,
+        setWithOptions:function (n, v, options) { 
+            var v = this.set(n,v);
+            Object.defineProperty(this.properties, n, options);
+            return v;
+        },
         toString:PrimitiveProxyToString,
+        unbox:PrimitiveProxyUnbox,
         valueOf:PrimitiveProxyValueOf,
     }), {
     "charAt":clos(function ($this, $closure, i) {
-        return $this.box().payload.charAt(i);
+        return $this.unbox().charAt(i);
     }),
     "charCodeAt":clos(function ($this, $closure, i) {
-        return $this.box().payload.charCodeAt(i);
+        return $this.unbox().charCodeAt(i);
     }),
     "concat":clos(function ($this, $closure) {
         var args = Array.prototype.slice.call(arguments, 2);
-        return $this.box().payload.concat.apply($this.payload, args);
+        return String.prototype.concat.apply($this.unbox(), args);
     }),
     "indexOf":clos(function ($this, $closure, searchValue, start) {
-        return $this.box().payload.indexOf(searchValue, start);
+        return $this.unbox().indexOf(searchValue, start);
     }),
     "lastIndexOf":clos(function ($this, $closure, searchValue, start) {
-        return $this.box().payload.lastIndexOf(searchValue, start);
+        return $this.unbox().lastIndexOf(searchValue, start);
     }),
     "match":clos(function ($this, $closure, regexp) {
-        var r = $this.box().payload.match(regexp);
+        var r = $this.unbox().match(regexp.unbox());
         if (r === null ) return r;
         var a = arr(r);
         a.set("index", r.index);
@@ -905,26 +985,29 @@ root.string = extend(extendProxy(root.object.createWithPayloadAndMap(String.prot
         } else {
             v = newValue;
         }
-        return $this.box().payload.replace(searchValue, v);
+        return $this.unbox().replace(searchValue.unbox(), v);
     }),
     "search":clos(function ($this, $closure, searchValue) {
-        return $this.box().payload.search(searchValue);
+        return $this.unbox().search(searchValue.unbox());
     }),
     "slice":clos(function ($this, $closure, start, end) {
-        return $this.box().payload.slice(start, end);
+        return $this.unbox().slice(start, end);
     }),
     "split":clos(function ($this, $closure, separator, limit) {
-        var r = $this.box().payload.split(separator, limit);
+        var r = $this.unbox().split(separator, limit);
         return (r === null ) ? r : arr(r);
     }),
     "substr":clos(function ($this, $closure, start, length) {
-        return $this.box().payload.substr(start, length);
+        return $this.unbox().substr(start, length);
+    }),
+    "substring":clos(function ($this, $closure, start, length) {
+        return $this.unbox().substring(start, length);
     }),
     "toLowerCase":clos(function ($this, $closure) {
-        return $this.box().payload.toLowerCase();
+        return $this.unbox().toLowerCase();
     }),
     "toUpperCase":clos(function ($this, $closure) {
-        return $this.box().payload.toUpperCase();
+        return $this.unbox().toUpperCase();
     }),
     "toString":clos(function ($this, $closure) {
         return String($this);
@@ -948,7 +1031,7 @@ root_global.set("String", extend(new FunctionProxy(function ($this, $closure, s)
     }),
     "prototype":root.string,
 }));
-root.string.set("constructor", root_global.get("String"));
+root.string.setWithOptions("constructor", root_global.get("String"), {enumerable:false});
 
 String.prototype.call = function () {
     throw new Error("TypeError: string primitive not a function");
@@ -959,6 +1042,12 @@ String.prototype.get = function (name) {
 String.prototype.getLength = function () {
     return this.length;
 };
+String.prototype.has = function (name) {
+    return this.box().has(name);
+};
+String.prototype.iterable = function () {
+    return this.box().iterable();
+};
 String.prototype.set = function (name, value) {
     return this.box().set(name, value);
 };
@@ -968,12 +1057,21 @@ String.prototype.box = function () {
 String.prototype.type = function () {
     return "object";
 };
+String.prototype.unbox = function () {
+    return this;
+};
 
 root.number = extend(extendProxy(root.object.createWithPayloadAndMap(Number.prototype, new ProxyMap()), {
         get:PrimitiveProxyGet,
         iterable:PrimitiveProxyIterable,
         set:PrimitiveProxySet,
+        setWithOptions:function (n, v, options) { 
+            var v = this.set(n,v);
+            Object.defineProperty(this.properties, n, options);
+            return v;
+        },
         toString:PrimitiveProxyToString,
+        unbox:PrimitiveProxyUnbox,
         valueOf:PrimitiveProxyValueOf,
     }), {
     "MAX_VALUE":Number.prototype.MAX_VALUE,
@@ -982,19 +1080,18 @@ root.number = extend(extendProxy(root.object.createWithPayloadAndMap(Number.prot
     "NaN":Number.prototype.NaN,
     "POSITIVE_INFINITY":Number.prototype.POSITIVE_INFINITY,
     "toExponential":clos(function ($this, $closure, x) {
-        return $this.box().payload.toExponential(x);
+        return $this.unbox().toExponential(x);
     }),
     "toFixed":clos(function ($this, $closure, x) {
-        return $this.box().payload.toFixed(x);
+        return $this.unbox().toFixed(x);
     }),
     "toPrecision":clos(function ($this, $closure, x) {
-        return $this.box().payload.toPrecision(x);
-    }),
-    "toString":clos(function ($this, $closure, radix) {
-        return $this.box().payload.toString(radix);
+        return $this.unbox().toPrecision(x);
+    }), "toString":clos(function ($this, $closure, radix) {
+        return $this.unbox().toString(radix);
     }),
     "valueOf":clos(function ($this, $closure) {
-        return $this.box().payload.valueOf();
+        return $this.unbox().valueOf();
     })
 });
 var NumberProxy = createFastConstructor(root.number);
@@ -1008,13 +1105,19 @@ root_global.set("Number", extend(new FunctionProxy(function ($this, $closure, va
 }), {
     "prototype":root.number,
 }));
-root.number.set("constructor", root_global.get("Number"));
+root.number.setWithOptions("constructor", root_global.get("Number"), {enumerable:false});
 
 Number.prototype.call = function () {
     throw new Error("TypeError: number primitive not a function");
 };
 Number.prototype.get = function (name) {
     return this.box().get(name);
+};
+Number.prototype.has = function (name) {
+    return this.box().has(name);
+};
+Number.prototype.iterable = function () {
+    return this.box().iterable();
 };
 Number.prototype.set = function (name, value) {
     return this.box().set(name, value);
@@ -1025,19 +1128,28 @@ Number.prototype.box = function () {
 Number.prototype.type = function () {
     return "object";
 };
+Number.prototype.unbox = function () {
+    return this;
+};
 
 root.boolean = extend(extendProxy(root.object.createWithPayloadAndMap(Boolean.prototype, new ProxyMap()), {
         get:PrimitiveProxyGet,
         iterable:PrimitiveProxyIterable,
         set:PrimitiveProxySet,
+        setWithOptions:function (n, v, options) { 
+            var v = this.set(n,v);
+            Object.defineProperty(this.properties, n, options);
+            return v;
+        },
         toString:PrimitiveProxyToString,
+        unbox:PrimitiveProxyUnbox,
         valueOf:PrimitiveProxyValueOf,
     }), {
     "toString":clos(function ($this, $closure) {
         return String($this);
     }),
     "valueOf":clos(function ($this, $closure) {
-        return $this.box().payload.valueOf();
+        return $this.unbox().valueOf();
     })
 });
 var BooleanProxy = createFastConstructor(root.boolean);
@@ -1051,13 +1163,19 @@ root_global.set("Boolean", extend(new FunctionProxy(function ($this, $closure, b
 }), {
     "prototype":root.boolean,
 }));
-root.boolean.set("constructor", root_global.get("Boolean"));
+root.boolean.setWithOptions("constructor", root_global.get("Boolean"), {enumerable:false});
 
 Boolean.prototype.call = function () {
     throw new Error("TypeError: boolean primitive not a function");
 };
 Boolean.prototype.get = function (name) {
     return this.box().get(name);
+};
+Boolean.prototype.has = function (name) {
+    return this.box().has(name);
+};
+Boolean.prototype.iterable = function () {
+    return this.box().iterable();
 };
 Boolean.prototype.set = function (name, value) {
     return this.box().set(name, value);
@@ -1067,6 +1185,9 @@ Boolean.prototype.box = function () {
 };
 Boolean.prototype.type = function () {
     return "object";
+};
+Boolean.prototype.unbox = function () {
+    return this;
 };
 
 root.regexp = extend(extendProxy(root.object.createWithPayloadAndMap(RegExp.prototype, new ProxyMap()), {
@@ -1087,6 +1208,7 @@ root.regexp = extend(extendProxy(root.object.createWithPayloadAndMap(RegExp.prot
                 }
             }
         },
+        iterable:PrimitiveProxyIterable,
         set:function (n, v) {
             if (n === "lastIndex"  || 
                 n === "ignoreCase" || 
@@ -1100,14 +1222,20 @@ root.regexp = extend(extendProxy(root.object.createWithPayloadAndMap(RegExp.prot
                 return ArraySetProp(this, n, v);
             }
         },
+        setWithOptions:function (n, v, options) { 
+            var v = this.set(n,v);
+            Object.defineProperty(this.properties, n, options);
+            return v;
+        },
         toString:PrimitiveProxyToString,
+        unbox:PrimitiveProxyUnbox,
         valueOf:PrimitiveProxyValueOf,
     }), {
     "toString":clos(function ($this, $closure) {
         return String($this);
     }),
     "exec":clos(function ($this, $closure, s) {
-        var r = $this.box().payload.exec(s);
+        var r = $this.unbox().exec(s);
         if (r === null ) return r;
         var a = arr(r);
         a.set("index", r.index);
@@ -1115,28 +1243,34 @@ root.regexp = extend(extendProxy(root.object.createWithPayloadAndMap(RegExp.prot
         return a;
     }),
     "test":clos(function ($this, $closure, s) {
-        var r = $this.box().payload.exec(s);
+        var r = $this.unbox().exec(s);
         return r === null ? r : arr(r);
     })
 });
 var RegExpProxy = createFastConstructor(root.regexp);
 
-root_global.set("RegExp", extend(new FunctionProxy(function ($this, $closure, regexp) {
+root_global.set("RegExp", extend(new FunctionProxy(function ($this, $closure, regexp, flag) {
     if ($this === root_global || $this === global) {
-        return RegExp(regexp);
+        return RegExp(regexp, flag);
     } else {
-        return new RegExpProxy(RegExp(regexp));
+        return new RegExpProxy(RegExp(regexp, flag));
     }
 }), {
     "prototype":root.regexp,
 }));
-root.regexp.set("constructor", root_global.get("RegExp"));
+root.regexp.setWithOptions("constructor", root_global.get("RegExp"), {enumerable:false});
 
 RegExp.prototype.call = function () {
     throw new Error("TypeError: regexp primitive not a function");
 };
 RegExp.prototype.get = function (name) {
     return this.box().get(name);
+};
+RegExp.prototype.has = function (name) {
+    return this.box().has(name);
+};
+RegExp.prototype.iterable = function () {
+    return this.box().iterable();
 };
 RegExp.prototype.set = function (name, value) {
     return this.box().set(name, value);
@@ -1147,19 +1281,28 @@ RegExp.prototype.box = function () {
 RegExp.prototype.type = function () {
     return "object";
 };
+RegExp.prototype.unbox = function () {
+    return this;
+};
 
 root.date = extend(extendProxy(root.object.createWithPayloadAndMap(Date.prototype, new ProxyMap()), {
         get:PrimitiveProxyGet,
         iterable:PrimitiveProxyIterable,
         set:PrimitiveProxySet,
+        setWithOptions:function (n, v, options) { 
+            var v = this.set(n,v);
+            Object.defineProperty(this.properties, n, options);
+            return v;
+        },
         toString:PrimitiveProxyToString,
+        unbox:PrimitiveProxyUnbox,
         valueOf:PrimitiveProxyValueOf,
     }), {
     "toString":clos(function ($this, $closure) {
         return String($this);
     }),
     "getTime":clos(function ($this, $closure) {
-        return $this.box().payload.getTime();
+        return $this.unbox().getTime();
     }),
 });
 var DateProxy = createFastConstructor(root.date);
@@ -1170,13 +1313,19 @@ root_global.set("Date", extend(new FunctionProxy(function ($this, $closure, x0, 
 }), {
     "prototype":root.date,
 }));
-root.date.set("constructor", root_global.get("Date"));
+root.date.setWithOptions("constructor", root_global.get("Date"), {enumerable:false});
 
 Date.prototype.call = function () {
     throw new Error("TypeError: date primitive not a function");
 };
 Date.prototype.get = function (name) {
     return this.box().get(name);
+};
+Date.prototype.has = function (name) {
+    return this.box().has(name);
+};
+Date.prototype.iterable = function () {
+    return this.box().iterable();
 };
 Date.prototype.set = function (name, value) {
     return this.box().set(name, value);
@@ -1187,12 +1336,21 @@ Date.prototype.box = function () {
 Date.prototype.type = function () {
     return "object";
 };
+Date.prototype.unbox = function () {
+    return this;
+};
 
 root.error = extend(extendProxy(root.object.createWithPayloadAndMap(Error.prototype, new ProxyMap()), {
         get:PrimitiveProxyGet,
         iterable:PrimitiveProxyIterable,
         set:PrimitiveProxySet,
+        setWithOptions:function (n, v, options) { 
+            var v = this.set(n,v);
+            Object.defineProperty(this.properties, n, options);
+            return v;
+        },
         toString:PrimitiveProxyToString,
+        unbox:PrimitiveProxyUnbox,
         valueOf:PrimitiveProxyValueOf,
     }), {
     "toString":clos(function ($this, $closure) {
@@ -1210,13 +1368,19 @@ root_global.set("Error", extend(new FunctionProxy(function ($this, $closure, s) 
 }), {
     "prototype":root.error,
 }));
-root.error.set("constructor", root_global.get("Error"));
+root.error.setWithOptions("constructor", root_global.get("Error"), {enumerable:false});
 
 Error.prototype.call = function () {
     throw new Error("TypeError: error primitive not a function");
 };
 Error.prototype.get = function (name) {
     return this.box().get(name);
+};
+Error.prototype.has = function (name) {
+    return this.box().has(name);
+};
+Error.prototype.iterable = function () {
+    return this.box().iterable();
 };
 Error.prototype.set = function (name, value) {
     return this.box().set(name, value);
@@ -1226,6 +1390,9 @@ Error.prototype.box = function () {
 };
 Error.prototype.type = function () {
     return "object";
+};
+Error.prototype.unbox = function () {
+    return this;
 };
 
 
@@ -1282,7 +1449,7 @@ var initState;
         var codeCacheName = "codeCache" + dataCache[0];
         var msg  = dataCache[1];
 
-        if (rcv === undefined || rcv === null) throw new Error("send: Unsupported message sending to " + rcv);
+        if (rcv === undefined || rcv === null) throw new Error("initState: Unsupported message sending to " + rcv + " at " + codeCacheName);
 
         rcv = rcv.box();
 
@@ -1290,7 +1457,9 @@ var initState;
         var method    = rcv.get(msg);
 
         if (!(method instanceof FunctionProxy)) {
-            throw new Error("Invalid message " + msg + " for " + rcv);
+            print(typeof method);
+            print(method);
+            throw new Error("Invalid message " + msg + " for " + rcv + " at " + codeCacheName);
         }
 
         var callFn    = method.get("call");
@@ -1310,7 +1479,7 @@ var initState;
                 throw new Error();
             } 
             
-            if (options.verbose) print("Caching generic method call for " + msg);
+            if (options.verbose) print("Caching generic method call for " + msg + " at " + dataCache[0]);
             global[codeCacheName]    = memNamedMethod(msg, args.length);
             global[dataCacheName][3] = rcv.map;
             return method.call.apply(method, [rcv].concat(args));

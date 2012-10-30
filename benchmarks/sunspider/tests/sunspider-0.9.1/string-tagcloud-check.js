@@ -36,7 +36,6 @@ var tagInfoJSON = '[\n  {\n    \"tag\": "titillation",\n    \"popularity\": 4294
 
 var log2 = Math.log(2);
 var tagInfo = tagInfoJSON.parseJSON(function(a, b) { if (a == "popularity") { return Math.log(b) / log2; } else {return b; } });
-print(tagInfo);
 var tagcloud = makeTagCloud(tagInfo);
 print(tagcloud);
 tagInfo = null;
