@@ -186,6 +186,7 @@ root.object = {
     payload:{__proto__:null},
     map:new ProxyMap(),
     newMap:null,
+    properties:null,
     createCtor:null,
 
     box:function () { return this; },
@@ -206,21 +207,18 @@ root.object = {
         } 
 
         if (this.createCtor === null) {
-            if (this !== root.object && 
-                !(this instanceof FunctionProxy) && 
-                !(this instanceof ArrayProxy)) {
-                this.createWithPayload = ProxyCreateWithPayload;
-            }
-
             this.createCtor = function (payload) {
                 this.payload = payload;
                 this.map     = this.newMap;
                 this.newMap  = null;
                 this.properties = null;
+                this.createCtor = null;
             };
             this.createCtor.prototype = this;
         }
-        return new this.createCtor(payload);
+        var r = new this.createCtor(payload);
+        if (r.__proto__ !== this) throw new Error("createWithPayload error!!!");
+        return r;
     }, 
     createWithPayloadAndMap:function (payload, map) {
         var obj = this.createWithPayload(payload);
@@ -351,10 +349,16 @@ extendProxy(root.function, {
     },
     iterable:function () { return this.payload; },
     toString:function () {
-        return "[Photon FunctionProxy]";
+        return Function.prototype.toString.call(this.unbox());
     },
     type:function () {
         return "function";
+    },
+    unbox:function () {
+        return this.payload;
+    },
+    valueOf:function () {
+        return Function.prototype.valueOf.call(this.unbox());
     },
     code:function () {
         return Function.prototype.toString.call(this.payload);
@@ -406,6 +410,8 @@ extend(root.object, {
         }
 
         var get = clos(new Function ("$this", "dataCache", "name",
+            " if ($this === undefined || $this === null) \n" + 
+            "    throw new Error(\"TypeError: \" + $this + \" does not have a property '\" + name + \"'\");\n" + 
             "return $this.get(name);"
         ));
         
@@ -615,8 +621,12 @@ extend(root.function, {
         });
     })()),
     "apply":clos(function ($this, $closure, obj, args) {
-        if (!(args instanceof ArrayProxy)) throw new Error("apply: Invalid array of arguments");
-        return Function.prototype.apply.call($this.payload, null, [obj, $this].concat(args.payload));
+        if (args instanceof ArrayProxy || args instanceof ArgumentsProxy) {
+            var args = args.unbox();
+        } else {
+            throw new Error("apply: Invalid array of arguments");
+        }
+        return Function.prototype.apply.call($this.payload, null, [obj, $this].concat(args));
     }),
     "__memoize__":clos(function ($this, $closure, rcv, method, args, dataCache) {
         return null;
@@ -703,6 +713,9 @@ root.array = extendProxy(root.object.createWithPayloadAndMap([], new ProxyMap), 
     toString:function () {
         //return "[ArrayProxy [" + Array.prototype.join.call(this.payload, ",") + "]]";
         return send(this, "toString");
+    },
+    unbox:function () {
+        return this.payload;
     },
 
     // Optimized methods
@@ -943,6 +956,11 @@ root.arguments = extendProxy(root.object.createWithPayloadAndMap([], new ProxyMa
             return ArraySetProp(this, n, v);
         }
     },
+    unbox:function () {
+        return this.iterable();
+    },
+
+
     // Optimized methods
     getNum:function (dataCache, n) {
         if (n >= 0 && n < this.getLength())
