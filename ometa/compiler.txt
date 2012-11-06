@@ -538,7 +538,7 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                             [#begin].concat(vs).concat(r.slice(1)),
                                                                             e,
                                                                             [#begin, 
-                                                                                [#code, "print(" + e + ".stack)"],
+                                                                                [#code, "print(" + e + ".get(\"stack\"))"],
                                                                                 [#call, [#get, "print"], [#string, "Unhandled exception:"]],
                                                                                 [#call, [#get, "print"], [#get, e]],
                                                                                 [#throw, [#get, e]]],

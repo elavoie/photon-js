@@ -764,7 +764,10 @@ extend(root.array, {
         return arr($this.payload.concat.apply($this.payload, args));
     }),
     "forEach":clos(function ($this, $closure, f, obj) {
-        arrayProxy = $this;
+        var arrayProxy = $this;
+        if (obj === undefined || null) 
+            obj = root_global;
+
         function g(x, i, arrayPayload) {
             return f.payload(this, f, x, i, arrayProxy);
         }
@@ -780,7 +783,10 @@ extend(root.array, {
         return $this.payload.lastIndexOf(searchValue, start);
     }),
     "map":clos(function ($this, $closure, f, obj) {
-        arrayProxy = $this;
+        var arrayProxy = $this;
+        if (obj === undefined || null) 
+            obj = root_global;
+
         function g(x, i, arrayPayload) {
             return f.payload(this, f, x, i, arrayProxy);
         }
@@ -1444,7 +1450,13 @@ Date.prototype.unbox = function () {
 };
 
 root.error = extend(extendProxy(root.object.createWithPayloadAndMap(Error.prototype, new ProxyMap()), {
-        get:PrimitiveProxyGet,
+        get:function (name) {
+            if (name === "stack") {
+                return this.payload.stack;
+            } else {
+                return PrimitiveProxyGet.call(this, name);
+            }
+        },
         iterable:PrimitiveProxyIterable,
         set:PrimitiveProxySet,
         setWithOptions:function (n, v, options) { 
@@ -1464,9 +1476,9 @@ var ErrorProxy = createFastConstructor(root.error);
 
 root_global.set("Error", extend(new FunctionProxy(function ($this, $closure, s) {
     if ($this === root_global || $this === global) {
-        return Error(s);
+        return new Error(s);
     } else {
-        return new ErrorProxy(Error(s));
+        return new ErrorProxy(new Error(s));
     }
 }), {
     "prototype":root.error,
