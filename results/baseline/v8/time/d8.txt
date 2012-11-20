@@ -1,0 +1,10 @@
+Richards: 14403
+DeltaBlue: 18771
+Crypto: 16813
+RayTrace: 20572
+EarleyBoyer: 34594
+RegExp: 3913
+Splay: 5441
+NavierStokes: 20210
+----
+Score (version 7): 13898

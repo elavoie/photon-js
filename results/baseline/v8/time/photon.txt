@@ -1,0 +1,10 @@
+Richards: 132
+DeltaBlue: 129
+Crypto: 495
+RayTrace: 173
+EarleyBoyer: 727
+RegExp: 502
+Splay: 144
+NavierStokes: 891
+----
+Score (version 7): 301
