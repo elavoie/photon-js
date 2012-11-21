@@ -30,28 +30,28 @@ for (var i = 0; i < options.files.length; ++i) {
 
 
 if (options.parser === SunSpiderResultsParser) {
-    names.push(["photon", "d8"], ["photon","spidermonkey"]);
+    names.push(["Photon", "V8"], ["Photon","SpiderMonkey"]);
 } else {
-    names.push(["d8", "photon"], ["spidermonkey", "photon"]);
+    names.push(["V8", "Photon"], ["SpiderMonkey", "Photon"]);
 }
 
 var scores = names.map(function () { return 1; });
 var benchmarkNb = 0;
-for (var benchmark in results["d8"].benchmarks) { benchmarkNb++; }
+for (var benchmark in results["V8"].benchmarks) { benchmarkNb++; }
 
-print("\\begin{tabular}{|" + ["l"].concat(names.map(function () { return "c"; })).join("|") + "|}")
+print("\\begin{tabular}{|" + ["l"].concat(names.map(function () { return "r"; })).join("|") + "|}")
 print("  \\hline");
-print("  " + ["benchmark"].concat(names.map(function (name) {
+print("  " + ["Benchmark"].concat(names.map(function (name) {
     if (typeof name === "string") 
         return name; 
     else 
         return name[0] + "/" + name[1];
 })).join(" & ") + " \\\\");
 print("  \\hline \\hline");
-for (var benchmark in results["d8"].benchmarks) {
+for (var benchmark in results["V8"].benchmarks) {
     print("  " + [benchmark].concat(names.map(function (name, i) { 
         if (typeof name === "string") 
-            var r =  results[name].benchmarks[benchmark]; 
+            var r =  results[name].benchmarks[benchmark].toFixed(1); 
         else 
             var r = (results[name[0]].benchmarks[benchmark] / results[name[1]].benchmarks[benchmark]).toFixed(1);
 
@@ -64,7 +64,7 @@ for (var benchmark in results["d8"].benchmarks) {
     print("  \\hline");
     print("  " + [(options.parser === V8ResultsParser ? "V8" : "SunSpider") +" Score"].concat(names.map(function (name) { 
         if (typeof name === "string")
-            return results[name].score; 
+            return results[name].score.toFixed(1); 
         else 
             return (results[name[0]].score / results[name[1]].score).toFixed(1);
     })).join(" & ") + "\\\\"); 

@@ -27,14 +27,14 @@
 
 
 load('base.js');
-load('src/richards.js');
-load('src/deltablue.js');
-load('src/crypto.js');
-load('src/raytrace.js');
-load('src/earley-boyer.js');
-load('src/regexp.js');
-load('src/splay.js');
-load('src/navier-stokes.js');
+load('src/Crypto.js');
+load('src/DeltaBlue.js');
+load('src/EarleyBoyer.js');
+load('src/NavierStokes.js');
+load('src/RayTrace.js');
+load('src/Regexp.js');
+load('src/Richards.js');
+load('src/Splay.js');
 
 var success = true;
 
