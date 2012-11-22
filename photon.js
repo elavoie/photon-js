@@ -79,7 +79,12 @@ for (var i = 0; i < arguments.length; ++i)
         options.trace_ic = true;
     else if (arguments[i] === "--trace_ic_tracker")
         tracker.setVerbosity(true);
-    else if (arguments[i] === "-f")
+    else if (arguments[i].match("--use_instrumentation=") !== null) {
+        options.use_instrumentation = true;
+        options.instrumentation_file = arguments[i].split("=").slice(1).join("=");
+    } else if (arguments[i] === "--show_instrumentation_results") {
+        options.show_instrumentation_results = true;
+    } else if (arguments[i] === "-f")
         undefined;
     else if (arguments[i] === "-o") {
         options.output_only = true;
@@ -87,6 +92,11 @@ for (var i = 0; i < arguments.length; ++i)
     } else
         files.push(arguments[i]);
 }
+
+function instrumentationResults() {}
+
+if (options.use_instrumentation)
+    src += readFile(options.instrumentation_file);
 
 for (var i = 0; i < files.length; ++i)
 {
@@ -107,5 +117,9 @@ for (var i = 0; i < files.length; ++i)
 
 if (options.verbose || options.output_only)
     writeFile(options.output_name, src);
+
 if (!options.output_only)
     eval(src);
+
+if (options.show_instrumentation_results)
+    print(instrumentationResults());

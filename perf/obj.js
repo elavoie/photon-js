@@ -8,7 +8,9 @@ var options = {
     verbose:false,
     use_ic:true,
     trace_ic:false,
-    trace_ic_tracker:false
+    trace_ic_tracker:false,
+    use_instrumentation:false,
+    show_instrumentation_results:false
 };
 var root = {};
 var nonEnumerable = {
