@@ -2,11 +2,26 @@
 var options = {
     output:"table.tex",
     files:[],
+    ratios:[],
+    abrv:{},
 };
 
 for (var i = 0; i < arguments.length; ++i) {
     var arg = arguments[i];
-    options.files.push(arg);
+
+    if (arg === "--ratio") {
+        var ratio = arguments[++i].split("/");
+        options.ratios.push(ratio);
+    } else if (arg === "--abrv") {
+        var abrv = arguments[++i].split("=");
+        options.abrv[abrv[0]] = abrv[1];
+    } else {
+        options.files.push(arg);
+    }
+}
+
+function getAbrv(name) {
+    return (options.abrv[name] !== undefined) ? options.abrv[name] : name;    
 }
 
 var results = {};
@@ -26,7 +41,7 @@ for (var i = 0; i < options.files.length; ++i) {
     names.push(name);
 }
 
-names.push(["Photon", "V8"]);
+names = names.concat(options.ratios);
 
 var scores = names.map(function () { return 0; });
 
@@ -34,12 +49,12 @@ print("\\begin{tabular}{|" + ["l"].concat(names.map(function () { return "r"; })
 print("  \\hline");
 print("  " + ["Benchmark"].concat(names.map(function (name) {
     if (typeof name === "string") 
-        return name; 
+        return getAbrv(name);
     else 
-        return name[0] + "/" + name[1];
+        return getAbrv(name[0]) + "/" + getAbrv(name[1]);
 })).join(" & ") + " \\\\");
 print("  \\hline \\hline");
-for (var benchmark in results["V8"]) {
+for (var benchmark in results[names[0]]) {
     print("  " + [benchmark].concat(names.map(function (name, i) { 
         if (typeof name === "string") 
             var r =  results[name][benchmark].toFixed(1); 
