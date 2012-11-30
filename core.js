@@ -294,7 +294,7 @@ var tracker;
         },
         removeCacheLinks:function (cacheId) {
             var keys = [];
-            for (objHashMsg in cache2ObjMsg[cacheId]) {
+            for (var objHashMsg in cache2ObjMsg[cacheId]) {
                 if (verbose) print("Removing tuple (" + objHashMsg + "," + cacheId + ")");
                 keys.push(objHashMsg);
             }

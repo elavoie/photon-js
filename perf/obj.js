@@ -1584,7 +1584,6 @@ var initState;
         if (callFn === defaultCall) {
             var memMethod = send(method, "__memoize__", rcv, method, arr(args), arr(dataCache));
 
-
             if (memMethod !== null) {       
                 var callFn    = memMethod.get("call");
                 if (callFn === defaultCall) {
@@ -1622,6 +1621,103 @@ function bailout(rcv, dataCache) {
 }
 
 // ------------------------------ Tracking mecanism for cache invalidation ----
-// TODO
+var tracker;
+(function () {
+    // Use objects as hash tables
+    var msg2Cache = {};
+    var cache2Msg = {};
+    var counter = 0;
+
+    var verbose = options.trace_ic_tracker;
+
+    function hash(obj) {
+        if (obj.hash === undefined) {
+            obj.hash = counter++;
+        }
+        return obj.hash;
+    }
+
+    tracker = {
+        addCacheLink:function (msg, cacheId, cacheData) {
+            if (msg === "call" || msg === "__memoize__") {
+                if (verbose) print("Ignoring tracking information for message " + msg + " because it was found on root.function");
+                return;
+            }
+
+            if (verbose) print("Adding tuple (" + msg + "," + cacheId + ")");
+
+            if (msg2Cache[msg] === undefined) {
+                msg2Cache[msg] = {};
+            }
+
+            msg2Cache[msg][cacheId] = cacheData;
+
+            // Remember the (objHash,msg) container for faster reverse lookup
+            if (cache2Msg[cacheId] === undefined) {
+                cache2Msg[cacheId] = {};
+            }
+            cache2Msg[cacheId][msg] = cacheData;
+        },
+        hasCacheLink:function (msg) {
+            return hasProp(msg2Cache, msg);
+        },
+        flushCaches:function (obj, msg) {
+            if ((msg === "call" || msg === "__memoize__") && obj === root.function) {
+                if (verbose) print("Flushing all caches");
+                var cacheIds = {};
+
+                for (var msg in msg2Cache) {
+                    for (var cacheId in msg2Cache[msg]) {
+                        cacheIds[cacheId] = true;
+                    }
+                }
+
+                var keys = [];
+                for (var cacheId in cacheIds) {
+                    keys.push(cacheId);
+                }
+            } else {
+                var keys = [];
+
+                if (msg2Cache[msg] !== undefined) {
+                    for (var cacheId in msg2Cache[msg]) {
+                        keys.push(cacheId);
+                    }
+                }
+            }
+
+            for (var i = 0; i < keys.length; ++i) {
+                var cacheId = keys[i];
+                this.removeCacheLinks(cacheId);
+                if (verbose) print("Resetting " + cacheId);
+                global[cacheId] = initState;
+            }
+        },
+        removeCacheLinks:function (cacheId) {
+            var keys = [];
+            for (var msg in cache2Msg[cacheId]) {
+                if (verbose) print("Removing tuple (" + msg + "," + cacheId + ")");
+                keys.push(msg);
+            }
+
+            // cacheData should be the same for all entries, so we should
+            // reset it only once
+            if (keys.length > 0) {
+                var cacheData = cache2Msg[cacheId][keys[0]];
+                global["dataCache"+cacheData[0]] = cacheData;
+                global["codeCache"+cacheData[0]] = initState;
+            }
+
+            for (var i = 0; i < keys.length; ++i) {
+                var k = keys[i];
+                delete msg2Cache[k][cacheId];
+            }
+            delete cache2Msg[cacheId];
+        },
+        setVerbosity:function (bool) {
+            verbose = bool;
+        }
+    };
+})();
 
 
