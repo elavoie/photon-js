@@ -1156,7 +1156,13 @@ ometa PhotonJSCodeGen {
   for      exprList:init trans:cond exprList:upd block:body        -> ("for (" +  init +  "; " +  cond +  "; " +  upd +  ")\n" +  body),
   forIn    trans:x trans:arr block:body                            -> ("for (" +  x +  " in getIterable(" +  arr +  "))\n" +  body),
   begin    flat:stmts                                              -> stmts,
-  func     :args :ctxt block:body                                  -> ("(new FunctionProxy(function (" + ["$this", "$closure"].concat(args).join(",") +  ")\n" + body + "))"),
+  func     :args :ctxt block:body                                  -> ((options.gen_function_ids && ctxt.name !== undefined && ctxt.name !== "undefined") ?
+                                                                            ("(FunctionProxyWithId(function (" + 
+                                                                                ["$this", "$closure"].concat(args).join(",") +  
+                                                                             ")\n" + body + ", " + ctxt.name.toProgramString() + "))") :
+                                                                            ("(new FunctionProxy(function (" + 
+                                                                                ["$this", "$closure"].concat(args).join(",") +  
+                                                                             ")\n" + body + "))")),
   call     trans:fn trans*:args                                    -> { var n = gensym();
                                                                         ("(function ("+n+") {" + "return send(" + [n, '"call"', "root_global"].concat(args).join(", ") +  ");})(" + fn + ")")},
   send     #__$call__  trans:recv trans*:args                      -> {var syms = args.map(function (x) { return gensym(); }); 

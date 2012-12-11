@@ -86,6 +86,8 @@ for (var i = 0; i < arguments.length; ++i)
         options.show_instrumentation_results = true;
     } else if (arguments[i] === "-f")
         undefined;
+    else if (arguments[i] === "--gen_function_ids")
+        options.gen_function_ids = true;
     else if (arguments[i] === "-o") {
         options.output_only = true;
         options.output_name = arguments[++i];

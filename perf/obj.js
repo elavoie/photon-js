@@ -10,11 +10,13 @@ var options = {
     trace_ic:false,
     trace_ic_tracker:false,
     use_instrumentation:false,
-    show_instrumentation_results:false
+    show_instrumentation_results:false,
+    gen_function_ids:false
 };
 var root = {};
 var nonEnumerable = {
     __ctor__:true,
+    __delete__:true,
     __get__:true,
     __memoize__:true,
     __new__:true,
@@ -227,8 +229,17 @@ root.object = {
         obj.map = map;
         return obj;
     },
+    delete:function (name) {
+        return delete this.payload[name];
+    },
     get:function (n) {
         return this.payload[n];
+    },
+    getPrototype:function () {
+        if (this !== root.object)
+            return this.__proto__;
+        else 
+            return null;
     },
     has:function (p) {
         return this.map.properties[p] === true;
@@ -311,16 +322,20 @@ function FunctionProxySet(n, v) {
             this.set("prototype", root.object.create());
         }
     }
-    if (n !== "length")
+    if (n !== "length") {
+        if (n === "call" && this !== root.function) 
+            throw new Error("Cannot redefine call on an object other than Function.prototype");
         return setProp(this, n, v);
-    else
+    } else
         // Length of a function is immutable
         return  v;
 }
 function FunctionProxySetOpt(n, v) {
-    if (n !== "length")
+    if (n !== "length") {
+        if (n === "call" && this !== root.function) 
+            throw new Error("Cannot redefine call on an object other than Function.prototype");
         return setProp(this, n, v);
-    else
+    } else
         // Length of a function is immutable
         return  v;
 }
@@ -333,6 +348,12 @@ root.function = root.object.createWithPayloadAndMap(function ($this, $closure) {
 root.function.payload.__proto__ = root.object.payload;
 
 FunctionProxy = createFastConstructor(root.function);
+
+function FunctionProxyWithId(fun, id) {
+    var f = new FunctionProxy(fun);
+    f.set("__id__", id);
+    return f;
+}
 
 extendProxy(root.function, {
     get:FunctionProxyGet,
@@ -370,6 +391,9 @@ extendProxy(root.function, {
 // ------------------------ Core Object Behavior (Object and Function) --------
 
 extend(root.object, {
+    __delete__:clos(function ($this, $closure, name) {
+        return $this.delete(name);
+    }),
     __new__:clos(function ($this, $closure, obj) {
         return obj;
     }, (function () {
@@ -412,8 +436,6 @@ extend(root.object, {
         }
 
         var get = clos(new Function ("$this", "dataCache", "name",
-            " if ($this === undefined || $this === null) \n" + 
-            "    throw new Error(\"TypeError: \" + $this + \" does not have a property '\" + name + \"'\");\n" + 
             "return $this.get(name);"
         ));
         
@@ -424,10 +446,6 @@ extend(root.object, {
                     if (options.verbose) print("Caching __get__ length at " + dataCache.get(0));
                     return getLength;
                 } else {
-                    // TODO: Dynamically add the new methods on the root object and all prototypes
-                    //       for primitive data types
-                    //if (options.verbose) print("Caching __get__ " + name + " at " + dataCache.get(0));
-                    //return getName(args.get(0));
                     return get;
                 }
             } else {
@@ -437,18 +455,7 @@ extend(root.object, {
         });
     })()),
     __set__:clos(function ($this, $closure, name, value) {
-        /*
-        if (tracker.hasCacheLinkForMsg(name)) {
-            var obj = $this;
-            while (obj !== null) {
-                if (hasProp(obj.payload, name)) {
-                    tracker.flushCaches(obj, name);
-                    break;
-                }
-                obj = obj.prototype;
-            }
-        }
-        */
+        if (tracker.hasCacheLink(name)) tracker.flushCaches(name);
         return $this.set(name, value);    
     }, (function () {
 
@@ -456,7 +463,10 @@ extend(root.object, {
         function updateProperty(name) {
             if (!hasProp(ownedNames, name)) {
                 ownedNames[name] = clos(new Function ("$this", "dataCache", "name", "value",
-                    "if ($this.map === dataCache[3]) return $this.payload."+name+" = value;\n" +
+                    "if ($this.map === dataCache[3]) {\n" +
+                    "   if (tracker.hasCacheLink(name)) tracker.flushCaches(name);\n" + 
+                    "   return $this.payload."+name+" = value;\n" +
+                    "}\n" + 
                     "return bailout($this, dataCache, name, value);"
                 ));
             }
@@ -468,6 +478,7 @@ extend(root.object, {
             if (!hasProp(newNames, name)) {
                 newNames[name] = clos(new Function ("$this", "dataCache", "name", "value",
                     "if ($this.map === dataCache[3]) {\n" +
+                    "    if (tracker.hasCacheLink(name)) tracker.flushCaches(name);\n" + 
                     "    $this.map = $this.map.siblings[name];\n" +
                     "    return $this.payload."+name+" = value;\n" +
                     "} return bailout($this, dataCache, name, value);"
@@ -477,6 +488,7 @@ extend(root.object, {
         }
 
         var set = clos(new Function ("$this", "dataCache", "name", "value",
+            "if (tracker.hasCacheLink(name)) tracker.flushCaches(name);\n" + 
             "return $this.set(name, value);"
         ));
         
@@ -486,42 +498,18 @@ extend(root.object, {
 
             if (dataCache.get(2)[1] === "string" && name !== "__proto__" && rcv.set === root.object.set) {
                 if (rcv.map.properties[name] === true) {
-                    // TODO: Handle tracking correctly depending on if the property
-                    //       has already been used as a method or not
                     return updateProperty(name);
                 } else {
-                    // Force creation of the next map
-                    //getMap(rcv.map, [name]);
                     return createProperty(name);
                 }
             } else {
                 return set;
             }
-
-            
-            // TODO: Handle tracking properly
-
-            /*
-            // If the property has never been used as a method on any object,
-            // use the optimized version otherwise use the regular version
-
-            // !tracker.hasCacheLinkForMsg(name) 
-
-            if ( dataCache.get(2)[1] === "string") {
-                //setPropTracker.addCacheLink(name, cacheId, dataCache);
-                if (options.verbose) print("Caching __set__ " + name);
-                return setName(name);
-            } else { 
-                // Note: This version is monotonic on a per cache basis: 
-                // once a property has been identified  method-like,
-                // unless something flushes the cache, the optimized version
-                // will never be used again
-                if (options.verbose) print("Caching __set__");
-                return set;
-            }
-            */
         });
     })()),
+    "getPrototype":clos(function ($this, $closure) {
+        return $this.getPrototype();
+    }),
     "hasOwnProperty":clos(function ($this, $closure, p) {
         return $this.has(p);
     }),
@@ -607,8 +595,6 @@ extend(root.function, {
                 var body = "return $this.call" + nb + "(" + ["obj"].concat(args).join(",") + ");"
                 argNbs[nb] = clos(Function.apply(null, ["$this", "dataCache", "obj"].concat(args).concat([body])));
                 
-                // TODO: Dynamically extend both the root object and root function to support
-                //       more arguments
                 if (nb >= 10) throw new Error("Unsupported number of arguments");
             }
             ensureCallMethodForArgNb(nb);
@@ -634,6 +620,12 @@ extend(root.function, {
         return null;
     })
 });
+
+root.function.setWithOptions("constructor", extend(clos(function ($this, $closure) { 
+    throw new Error("Unsupported Function constructor");
+}), {
+    "prototype":root.function,
+}), {enumerable:false});
 
 // ------------------------ Standard Library Representation and Behavior ------
 
@@ -871,6 +863,7 @@ var root_global = extend(root.object.create(), {
 
     "Object":root.object.get("constructor"),
     "Array":root.array.get("constructor"),
+    "Function":root.function.get("constructor"),
     "Math":extend(root.object.create(), {
         "E":Math.E,
         "LN2":Math.LN2,
@@ -923,7 +916,9 @@ var root_global = extend(root.object.create(), {
     }),
 });
 
+root.global = root_global; 
 var $this = root.global;
+
 
 root.arguments = extendProxy(root.object.createWithPayloadAndMap([], new ProxyMap), {
     get:function (n) {
@@ -1589,6 +1584,7 @@ var initState;
                 if (callFn === defaultCall) {
                     global[codeCacheName]    = memMethod.payload;
                     global[dataCacheName][3] = rcv.map;
+                    tracker.addCacheLink(msg, dataCache[0], dataCache);
                     return method.call.apply(method, [rcv].concat(args));
                 }
 
@@ -1598,10 +1594,13 @@ var initState;
             if (options.verbose) print("Caching generic method call for " + msg + " at " + dataCache[0]);
             global[codeCacheName]    = memNamedMethod(msg, args.length);
             global[dataCacheName][3] = rcv.map;
+            // TODO: Globally reset all caches whether they are tracked or not on call redefinition instead of
+            //       of tracking generic method calls 
+            tracker.addCacheLink("call", dataCache[0], dataCache);
             return method.call.apply(method, [rcv].concat(args));
+        } else {
+            return callFn.call.apply(callFn, [method, rcv].concat(args));
         }
-
-        throw new Error();
     };
 })();
 
@@ -1610,7 +1609,7 @@ function bailout(rcv, dataCache) {
         throw new Error("Invalid message for '" + rcv + "'");
     } 
     // Remove cache from invalidation set(s) and reset data cache
-    //tracker.removeCacheLinks("codeCache"+cacheData[0]);
+    tracker.removeCacheLinks(dataCache[0]);
     global["codeCache"+dataCache[0]] = initState;
     dataCache.length = 3;
 
@@ -1639,11 +1638,6 @@ var tracker;
 
     tracker = {
         addCacheLink:function (msg, cacheId, cacheData) {
-            if (msg === "call" || msg === "__memoize__") {
-                if (verbose) print("Ignoring tracking information for message " + msg + " because it was found on root.function");
-                return;
-            }
-
             if (verbose) print("Adding tuple (" + msg + "," + cacheId + ")");
 
             if (msg2Cache[msg] === undefined) {
@@ -1652,7 +1646,6 @@ var tracker;
 
             msg2Cache[msg][cacheId] = cacheData;
 
-            // Remember the (objHash,msg) container for faster reverse lookup
             if (cache2Msg[cacheId] === undefined) {
                 cache2Msg[cacheId] = {};
             }
@@ -1661,8 +1654,8 @@ var tracker;
         hasCacheLink:function (msg) {
             return hasProp(msg2Cache, msg);
         },
-        flushCaches:function (obj, msg) {
-            if ((msg === "call" || msg === "__memoize__") && obj === root.function) {
+        flushCaches:function (msg) {
+            if ((msg === "call" || msg === "__memoize__")) {
                 if (verbose) print("Flushing all caches");
                 var cacheIds = {};
 
