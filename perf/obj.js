@@ -438,20 +438,27 @@ extend(root.object, {
         var get = clos(new Function ("$this", "dataCache", "name",
             "return $this.get(name);"
         ));
+
+        var getNum = clos(new Function ("$this", "dataCache", "name",
+            "return $this.getNum(dataCache, name);"
+        ));
+        
         
         return clos(function ($this, $closure, rcv, method, args, dataCache) {
+            return get;
+            /*
             var name = args.get(0);
-            if (dataCache.get(2)[1] === "string") {
-                if (name === "length") {
-                    if (options.verbose) print("Caching __get__ length at " + dataCache.get(0));
-                    return getLength;
-                } else {
-                    return get;
-                }
+            if (rcv instanceof ArrayProxy && (typeof name) === "number") {
+                if (options.verbose) print("Caching __get__ numerical at " + dataCache.get(0));
+                return getNum;
+            } else if (name === "length" && dataCache.get(2)[1] === "string") {
+                if (options.verbose) print("Caching __get__ length at " + dataCache.get(0));
+                return getLength;
             } else {
                 if (options.verbose) print("Caching __get__ at " + dataCache.get(0));
                 return get;
             }
+            */
         });
     })()),
     __set__:clos(function ($this, $closure, name, value) {
@@ -721,35 +728,6 @@ root.array = extendProxy(root.object.createWithPayloadAndMap([], new ProxyMap), 
     },
 });
 extend(root.array, {
-    __get__:clos(function ($this, $closure, name) {
-        return $this.get(name);
-    }, (function () {
-        var getLength = clos(new Function("$this", "dataCache", "name",
-            "return $this.getLength(dataCache);"
-        ));
-
-        var get = clos(new Function ("$this", "dataCache", "name",
-            "return $this.get(name);"
-        ));
-
-        var getNum = clos(new Function ("$this", "dataCache", "name",
-            "return $this.getNum(dataCache, name);"
-        ));
-        
-        return clos(function ($this, $closure, rcv, method, args, dataCache) {
-            var name = args.get(0);
-            if ((typeof name) === "number") {
-                if (options.verbose) print("Caching __get__ numerical at " + dataCache.get(0));
-                return getNum;
-            } else if (name === "length" && dataCache.get(2)[1] === "string") {
-                if (options.verbose) print("Caching __get__ length at " + dataCache.get(0));
-                return getLength;
-            } else {
-                if (options.verbose) print("Caching __get__ at " + dataCache.get(0));
-                return get;
-            }
-        });
-    })()),
     "concat":clos(function ($this, $closure) {
         var args = Array.prototype.slice.call(arguments, 2).map(function (a) { 
             if (a  instanceof ArrayProxy) return a.payload;
@@ -840,14 +818,6 @@ root.array.setWithOptions("constructor", extend(clos(function ($this, $closure) 
 
 
 var root_global = extend(root.object.create(), {
-    /*
-    "__get__":clos(function ($this, $closure, name) {
-        if (hasProp($this.map.properties, name))
-            return $this.get(name);
-
-        throw new Error("ReferenceError: " + name + " is not defined");
-    }),
-    */
     "__notUnderstood__":clos(function ($this, $closure, msg, args) {
         throw new Error("ReferenceError: " + msg + " is not defined");
     }),
