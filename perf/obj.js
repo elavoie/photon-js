@@ -514,9 +514,6 @@ extend(root.object, {
             }
         });
     })()),
-    "getPrototype":clos(function ($this, $closure) {
-        return $this.getPrototype();
-    }),
     "hasOwnProperty":clos(function ($this, $closure, p) {
         return $this.has(p);
     }),
@@ -538,6 +535,10 @@ root.object.setWithOptions("constructor", extend(clos(function ($this, $closure)
 }), {
     "prototype":root.object,
     "create":clos(function ($this, $closure, o) { return o.create(); }),
+}), {enumerable:false});
+
+root.object.setWithOptions("getPrototype", clos(function ($this, $closure) {
+    return $this.getPrototype();
 }), {enumerable:false});
 
 function Proxy() { throw new Error("Unsupported Proxy construction"); }
