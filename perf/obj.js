@@ -24,6 +24,11 @@ var nonEnumerable = {
     constructor:true,
 };
 
+// Forward declaration of tracker
+var tracker = {
+    hasCacheLink:function () { return false; }
+}
+
 function isPrimitive(x) {
     return x === null || x === undefined || (typeof x) === "number" || (typeof x) === "string" || (typeof x) === "boolean";
 }
@@ -81,6 +86,8 @@ function ProxyMap() {
 }
 
 function setProp(obj, n, v) {
+    if (tracker.hasCacheLink(n)) tracker.flushCaches(n);
+
     if (obj.map.properties[n] === true) {
         return obj.payload[n] = v;
     } else if (obj.map.siblings[n] instanceof ProxyMap) {
@@ -445,8 +452,6 @@ extend(root.object, {
         
         
         return clos(function ($this, $closure, rcv, method, args, dataCache) {
-            return get;
-            /*
             var name = args.get(0);
             if (rcv instanceof ArrayProxy && (typeof name) === "number") {
                 if (options.verbose) print("Caching __get__ numerical at " + dataCache.get(0));
@@ -458,11 +463,9 @@ extend(root.object, {
                 if (options.verbose) print("Caching __get__ at " + dataCache.get(0));
                 return get;
             }
-            */
         });
     })()),
     __set__:clos(function ($this, $closure, name, value) {
-        if (tracker.hasCacheLink(name)) tracker.flushCaches(name);
         return $this.set(name, value);    
     }, (function () {
 
@@ -495,7 +498,6 @@ extend(root.object, {
         }
 
         var set = clos(new Function ("$this", "dataCache", "name", "value",
-            "if (tracker.hasCacheLink(name)) tracker.flushCaches(name);\n" + 
             "return $this.set(name, value);"
         ));
         
@@ -667,6 +669,9 @@ function ArrayProxySet(n, v) {
 }
 
 function ArraySetProp(obj, n, v) {
+
+    if (tracker.hasCacheLink(n)) tracker.flushCaches(n);
+
     if (obj.map.properties[n] === true) {
         return obj.properties[n] = v;
     } else if (obj.map.siblings[n] instanceof ProxyMap) {
@@ -1282,6 +1287,7 @@ root.regexp = extend(extendProxy(root.object.createWithPayloadAndMap(RegExp.prot
                 n === "global"     || 
                 n === "multiline"  || 
                 n === "source") {
+                if (tracker.hasCacheLink(n)) tracker.flushCaches(n);
                 return this.payload[n] = v;
             } else if (n === "__proto__") {
                 throw new Error("Unsupported modification of the __proto__ property");
@@ -1591,7 +1597,6 @@ function bailout(rcv, dataCache) {
 }
 
 // ------------------------------ Tracking mecanism for cache invalidation ----
-var tracker;
 (function () {
     // Use objects as hash tables
     var msg2Cache = {};

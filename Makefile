@@ -45,8 +45,8 @@ MEM_EXP_FILES = \
     results/baseline/v8/memory/V8.txt \
     results/instrumented/sunspider/memory/Photon-simple.txt \
     results/instrumented/v8/memory/Photon-simple.txt \
-#    results/instrumented/sunspider/memory/Photon-fast.txt \
-#    results/instrumented/v8/memory/Photon-fast.txt 
+    results/instrumented/sunspider/memory/Photon-fast.txt \
+    results/instrumented/v8/memory/Photon-fast.txt 
 
 TIME_EXP_FILES = \
     results/baseline/sunspider/time/Photon.txt \
@@ -57,8 +57,8 @@ TIME_EXP_FILES = \
     results/baseline/v8/time/SpiderMonkey.txt \
     results/instrumented/sunspider/time/Photon-simple.txt \
     results/instrumented/v8/time/Photon-simple.txt \
-#    results/instrumented/sunspider/time/Photon-fast.txt \
-#    results/instrumented/v8/time/Photon-fast.txt
+    results/instrumented/sunspider/time/Photon-fast.txt \
+    results/instrumented/v8/time/Photon-fast.txt
 
 all: test
 
@@ -175,15 +175,22 @@ clean-results:
 
 ABRV=--abrv SpiderMonkey=SM --abrv Photon=Pn --abrv Photon-simple=Pn-spl --abrv Photon-fast=Pn-fast
 
+PERF_INSTR_FILES_V8=results/baseline/v8/time/Photon.txt results/instrumented/v8/time/Photon-simple.txt results/instrumented/v8/time/Photon-fast.txt
+PERF_INSTR_FILES_SS=results/baseline/sunspider/time/Photon.txt results/instrumented/sunspider/time/Photon-simple.txt results/instrumented/sunspider/time/Photon-fast.txt
+MEM_INSTR_FILES_V8=results/baseline/v8/memory/Photon.txt results/instrumented/v8/memory/Photon-simple.txt results/instrumented/v8/memory/Photon-fast.txt
+MEM_INSTR_FILES_SS=results/baseline/sunspider/memory/Photon.txt results/instrumented/sunspider/memory/Photon-simple.txt results/instrumented/sunspider/memory/Photon-fast.txt
+INSTR_RATIOS_V8=--ratio Photon/Photon-simple --ratio Photon/Photon-fast
+INSTR_RATIOS_SS=--ratio Photon-simple/Photon --ratio Photon-fast/Photon
+
 tables: time-exps mem-exps 
 	./results2latex.sh -v8 --ratio V8/Photon --ratio SpiderMonkey/Photon $(ABRV) results/baseline/v8/time/*.txt > results/baseline/v8/time/table.tex
 	./results2latex.sh -sunspider --ratio Photon/V8 --ratio Photon/SpiderMonkey $(ABRV) results/baseline/sunspider/time/*.txt > results/baseline/sunspider/time/table.tex
-	./results2latex.sh -v8 --ratio Photon/Photon-simple $(ABRV) results/baseline/v8/time/Photon.txt results/baseline/v8/time/SpiderMonkey.txt results/instrumented/v8/time/Photon-simple.txt  > results/instrumented/v8/time/table.tex
-	./results2latex.sh -sunspider  --ratio Photon-simple/Photon $(ABRV) results/baseline/sunspider/time/Photon.txt results/baseline/sunspider/time/SpiderMonkey.txt results/instrumented/sunspider/time/Photon-simple.txt > results/instrumented/sunspider/time/table.tex
+	./results2latex.sh -v8 $(INSTR_RATIOS_V8) $(ABRV) $(PERF_INSTR_FILES_V8)  > results/instrumented/v8/time/table.tex
+	./results2latex.sh -sunspider  $(INSTR_RATIOS_SS) $(ABRV) $(PERF_INSTR_FILES_SS) > results/instrumented/sunspider/time/table.tex
 	./mem2latex.sh --ratio Photon/V8 $(ABRV) results/baseline/v8/memory/*.txt > results/baseline/v8/memory/table.tex
 	./mem2latex.sh --ratio Photon/V8 $(ABRV) results/baseline/sunspider/memory/*.txt > results/baseline/sunspider/memory/table.tex
-	./mem2latex.sh --ratio Photon-simple/Photon $(ABRV) results/baseline/v8/memory/Photon.txt results/instrumented/v8/memory/Photon-simple.txt > results/instrumented/v8/memory/table.tex
-	./mem2latex.sh --ratio Photon-simple/Photon $(ABRV) results/baseline/sunspider/memory/Photon.txt results/instrumented/sunspider/memory/Photon-simple.txt > results/instrumented/sunspider/memory/table.tex
+	./mem2latex.sh $(INSTR_RATIOS_SS) $(ABRV) $(MEM_INSTR_FILES_V8) > results/instrumented/v8/memory/table.tex
+	./mem2latex.sh $(INSTR_RATIOS_SS) $(ABRV) $(MEM_INSTR_FILES_SS) > results/instrumented/sunspider/memory/table.tex
 
 
 
