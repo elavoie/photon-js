@@ -114,6 +114,37 @@ OMETA_COMPILE_FILES=\
    deps/ometa-js/ometa-rhino.js             \
    ometa-compile.js
 
+# --------------- User options ------------------------------------------------
+
+all: help
+
+clean-results: clean-benchmarks-results
+
+help:
+	@echo "Options:";\
+    echo "    clean-results: Flush all intermediary results";\
+    echo "    help:          Print this help";\
+    echo "    install:       Fetch and patch dependencies";\
+    echo "    latex-results: Run on benchmarks and produce latex tables";\
+    echo "    photon:        Create executable script for photon";\
+    echo "    test:          Test executable with sanity checks";\
+
+install: deps-v8-version deps-sunspider-patched deps/ometa-js
+
+latex-results: photon tables
+
+photon: photon-js.js
+	echo "$(V8_EXEC_PATH) photon-js.js --expose_gc -- \$$@" > photon
+
+test: photon
+	python check-output.py
+
+
+
+
+
+# --------------- Targets used for internal dependencies ----------------------
+
 deps-dir:
 	mkdir -p deps
 
@@ -124,7 +155,7 @@ deps/v8:
 	git clone git://github.com/v8/v8.git deps/v8
 
 deps-v8-version: deps/v8
-	if [ $$(git --git-dir=$(V8_REPOSITORY_PATH)/.git --work-tree=$(V8_REPOSITORY_PATH) rev-parse HEAD) != $(V8_COMMIT_HASH) ]; \
+	@if [ $$(git --git-dir=$(V8_REPOSITORY_PATH)/.git --work-tree=$(V8_REPOSITORY_PATH) rev-parse HEAD) != $(V8_COMMIT_HASH) ]; \
     then echo "Incompatible V8 version"; \
        git --git-dir=$(V8_REPOSITORY_PATH)/.git --work-tree=$(V8_REPOSITORY_PATH) clean -f -d;\
        git --git-dir=$(V8_REPOSITORY_PATH)/.git --work-tree=$(V8_REPOSITORY_PATH) reset --hard $(V8_COMMIT_HASH);\
@@ -135,18 +166,21 @@ deps-v8-version: deps/v8
 	   for i in $(HOST_FILES); do ln -s ../../../$$i $(V8_REPOSITORY_PATH)/src/$$(basename $$i); done\
     fi 
 
-deps/v8/d8: deps-v8-version
+deps/v8/d8: $(HOST_FILES)
 	pushd deps/v8 && scons d8 arch=ia32 I_know_I_should_build_with_GYP=yes && popd
 
 deps/sunspider:
 	svn checkout http://sunspider-mod.googlecode.com/svn/trunk deps/sunspider
 
-deps/sunspider-patched: deps/sunspider
+deps/sunspider/tests/sunspider-0.9.1/crypto-aes.js.orig: deps/sunspider deps/sunspider/tests/sunspider-0.9.1/crypto-aes.js
 	patch deps/sunspider/tests/sunspider-0.9.1/crypto-aes.js benchmarks/sunspider/patches/crypto-aes.diff
+	touch deps/sunspider/tests/sunspider-0.9.1/crypto-aes.js.orig
 
-deps: deps/v8/d8 deps/ometa-js deps/sunspider-patched
+deps-sunspider-patched: deps/sunspider/tests/sunspider-0.9.1/crypto-aes.js.orig
 
-all: tables
+
+deps: deps/v8/d8 deps/ometa-js
+
 
 ometa/compiler.js: ometa/compiler.txt
 	$(V8_EXEC_PATH) $(OMETA_COMPILE_FILES) -- ometa/compiler
@@ -158,8 +192,6 @@ photon-js.js: $(FILES)
 	wc -l perf/obj.js | sed -e 's/    \([0-9]*\) .*/\1/g' > perf/loc.txt;
 	cat $(FILES) > photon-js.js;
 
-photon: photon-js.js
-	echo "$(V8_EXEC_PATH) photon-js.js --expose_gc -- \$$@" > photon
 
 results/baseline/v8/memory:
 	mkdir -p results/baseline/v8/memory
@@ -283,7 +315,7 @@ results/instrumented/v8/time/Photon-fast.txt: photon ometa/compiler.js perf/obj.
 mem-exps:  deps results-dirs $(MEM_EXP_FILES)
 time-exps: deps results-dirs $(TIME_EXP_FILES)
 
-clean-results:
+clean-benchmark-results:
 	rm results/baseline/v8/time/*.txt
 	rm results/baseline/v8/memory/*.txt
 	rm results/baseline/sunspider/time/*.txt
