@@ -103,6 +103,17 @@ V8_COMMIT_HASH = fd6a06292c945246c40cafe7062e81690b554345
 V8_REPOSITORY_PATH = deps/v8
 V8_EXEC_PATH=$(CURDIR)/deps/v8/d8
 
+OMETA_COMPILE_FILES=\
+   deps/ometa-js/lib.js                     \
+   deps/ometa-js/ometa-base.js              \
+   deps/ometa-js/parser.js                  \
+   deps/ometa-js/bs-js-compiler.js          \
+   deps/ometa-js/bs-ometa-compiler.js       \
+   deps/ometa-js/bs-ometa-optimizer.js      \
+   deps/ometa-js/bs-ometa-js-compiler.js    \
+   deps/ometa-js/ometa-rhino.js             \
+   ometa-compile.js
+
 deps-dir:
 	mkdir -p deps
 
@@ -133,14 +144,14 @@ deps/sunspider:
 deps/sunspider-patched: deps/sunspider
 	patch deps/sunspider/tests/sunspider-0.9.1/crypto-aes.js benchmarks/sunspider/patches/crypto-aes.diff
 
-deps: deps/v8/d8 deps/ometa-js
+deps: deps/v8/d8 deps/ometa-js deps/sunspider-patched
 
 all: tables
 
 ometa/compiler.js: ometa/compiler.txt
-	./ometa-compile.sh ometa/compiler
+	$(V8_EXEC_PATH) $(OMETA_COMPILE_FILES) -- ometa/compiler
 
-ometa/parse-experiment-results.js: ometa/parse-experiment-results.txt
+ometa/parse-experiment-results.js: deps/v8/d8 deps/ometa-js ometa/parse-experiment-results.txt
 	./ometa-compile.sh ometa/parse-experiment-results
 
 photon-js.js: $(FILES)
