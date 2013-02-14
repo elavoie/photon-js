@@ -62,7 +62,12 @@ for (var benchmark in results[names[0]]) {
             var r = (results[name[0]][benchmark] / results[name[1]][benchmark]).toFixed(1);
 
         scores[i] = Math.max(scores[i], r);
-        return r;
+
+        if (r === "NaN") {
+            return "--";
+        } else {
+            return r;
+        }
     })).join(" & ") + "\\\\"); 
     print("  \\hline");
 }
