@@ -2,7 +2,8 @@ import sys
 import subprocess
 
 if __name__ == "__main__":
-    PATH="benchmarks/sunspider/tests/sunspider-0.9.1/"
+    PATH="deps/sunspider/tests/sunspider-0.9.1/"
+    CHECK_PATH="benchmarks/sunspider/tests/sunspider-0.9.1/"
     subprocess.call(["make", "photon"], stdout=1)
 
     args = [];
@@ -49,10 +50,10 @@ if __name__ == "__main__":
     for i in range(0, len(args)):
         TEST=args[i]
         fout0 = file("/tmp/log.txt", "w")
-        subprocess.call(["d8", "%s/%s.js"%(PATH,TEST), "%s/%s-check.js"%(PATH,TEST)], stdout=fout0)
+        subprocess.call(["d8", "%s/%s.js"%(PATH,TEST), "%s/%s-check.js"%(CHECK_PATH,TEST)], stdout=fout0)
         fout0.close()
         fout1 = file("/tmp/log2.txt", "w")
-        subprocess.call(["d8", "/Users/erick/Recherche/photon-js/photon-js.js", "--expose_gc", "--", "%s/%s.js"%(PATH,TEST), "%s/%s-check.js"%(PATH,TEST)] + (["--use_ic"] if use_ic else []), stdout=fout1)
+        subprocess.call(["d8", "/Users/erick/Recherche/photon-js/photon-js.js", "--expose_gc", "--", "%s/%s.js"%(PATH,TEST), "%s/%s-check.js"%(CHECK_PATH,TEST)] + (["--use_ic"] if use_ic else []), stdout=fout1)
         fout1.close()
         
         if verbose:

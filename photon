@@ -1,1 +1,1 @@
-d8 photon-js.js --expose_gc -- $@
+/Users/erick/Downloads/photon-js/deps/v8/d8 photon-js.js --expose_gc -- $@

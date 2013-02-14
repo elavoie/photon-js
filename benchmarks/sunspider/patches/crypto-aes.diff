@@ -1,0 +1,4 @@
+85c85
+<   var Nk = key.length/4  // key length (in words): 4/6/8 for 128/192/256-bit keys
+---
+>   var Nk = key.length/4; // key length (in words): 4/6/8 for 128/192/256-bit keys
