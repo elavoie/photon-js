@@ -1,0 +1,27 @@
+Photon is a Metacircular Virtual Machine for JavaScript allowing run-time instrumentation of object model operations and function calls. It is intended as a test bed for Metacircular Virtual Machine Layering explorations with the goal of facilitating instrumentation for performance profiling, security invariant monitoring and benchmarks generation.
+
+The current version depends on V8 for benchmarking its performance outside of a web browser. The intend is to remove this dependency once it will be integrated in a web browser. To install Photon, once the repository has been cloned, run:
+
+> make install 
+
+This will fetch all dependencies and patch them accordingly if required. Then run:
+
+> make photon
+
+to produce an executable.
+
+To learn the supported options of the makefile do:
+
+> make help 
+
+To learn the supported options of Photon, simply run it without any argument:
+
+> ./photon
+
+Known Bugs:
+
+The current supported version of V8 has a non-deterministic bug when generating the JS to JS compiler from its OMeta description. Running: 
+
+./ometa-compile.sh ometa/compiler
+
+until it succeeds should do the job until the particular version of V8 used is updated.
