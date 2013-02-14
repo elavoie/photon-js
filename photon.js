@@ -69,6 +69,14 @@ var files = [];
 options.output_only = false;
 options.output_name = "temp.js";
 
+if (arguments.length === 0) {
+    print("Usage: ");
+    print("    photon <options> file1 file2 ... filek");
+    print("Options:");
+    print("    --use_instrumentation=<file> (Run instrumentation code before files)");
+    print("    -o <file> (Output compiled code without running it)");
+}
+
 for (var i = 0; i < arguments.length; ++i)
 {
     if (arguments[i] === "-v")

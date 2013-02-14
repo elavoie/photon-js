@@ -129,7 +129,7 @@ help:
     echo "    photon:        Create executable script for photon";\
     echo "    test:          Test executable with sanity checks";\
 
-install: deps-v8-version deps-sunspider-patched deps/ometa-js
+install: deps-v8-version deps/v8/d8 deps-sunspider-patched deps/ometa-js
 
 latex-results: photon tables
 
