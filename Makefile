@@ -103,6 +103,8 @@ V8_COMMIT_HASH = fd6a06292c945246c40cafe7062e81690b554345
 V8_REPOSITORY_PATH = deps/v8
 V8_EXEC_PATH=$(CURDIR)/deps/v8/d8
 
+PHOTON_EXEC_PATH=$(CURDIR)/photon
+
 OMETA_COMPILE_FILES=\
    deps/ometa-js/lib.js                     \
    deps/ometa-js/ometa-base.js              \
@@ -134,7 +136,7 @@ install: deps-v8-version deps/v8/d8 deps-sunspider-patched deps/ometa-js
 latex-results: photon tables
 
 photon: photon-js.js
-	echo "$(V8_EXEC_PATH) photon-js.js --expose_gc -- \$$@" > photon
+	echo "$(V8_EXEC_PATH) $(CURDIR)/photon-js.js --expose_gc -- \$$@" > photon
 
 test: photon
 	python check-output.py
@@ -261,7 +263,7 @@ results/baseline/v8/time/V8.txt: photon ometa/compiler.js perf/obj.js
 
 results/baseline/v8/time/Photon.txt: photon ometa/compiler.js perf/obj.js
 	pushd benchmarks/v8-v7; \
-        photon v8.js > ../../results/baseline/v8/time/Photon.txt; \
+        $(PHOTON_EXEC_PATH) v8.js > ../../results/baseline/v8/time/Photon.txt; \
     popd
 
 results/baseline/v8/time/SpiderMonkey.txt: photon ometa/compiler.js perf/obj.js
@@ -343,6 +345,10 @@ tables: ometa/parse-experiment-results.js time-exps mem-exps
 	./mem2latex.sh --ratio Photon/V8 $(ABRV) results/baseline/sunspider/memory/*.txt > results/baseline/sunspider/memory/table.tex
 	./mem2latex.sh $(INSTR_RATIOS_SS) $(ABRV) $(MEM_INSTR_FILES_V8) > results/instrumented/v8/memory/table.tex
 	./mem2latex.sh $(INSTR_RATIOS_SS) $(ABRV) $(MEM_INSTR_FILES_SS) > results/instrumented/sunspider/memory/table.tex
+
+v8-baseline-table: ometa/parse-experiment-results.js results/baseline/v8/time/Photon.txt results/baseline/v8/time/SpiderMonkey.txt results/baseline/v8/time/V8.txt
+	./results2latex.sh -v8 --ratio V8/Photon --ratio SpiderMonkey/Photon $(ABRV) results/baseline/v8/time/*.txt > results/baseline/v8/time/table.tex
+	cat latex/minimal-header.tex results/baseline/v8/time/table.tex latex/minimal-footer.tex | pdflatex
 
 
 

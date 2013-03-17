@@ -295,6 +295,9 @@ root.object = {
     getNum:function (dataCache, n) {
         return this.get(n);
     },
+    callPushWith1Arg:function (x) {
+        return this.get("push").call1(this, x);
+    }
 };
 
 function FunctionProxyGet(n) {
@@ -502,6 +505,8 @@ extend(root.object, {
         ));
         
         return clos(function ($this, $closure, rcv, method, args, dataCache) {
+            return set;
+            /*
             var name = args.get(0)
             var cacheId = dataCache.get(0);
 
@@ -514,6 +519,7 @@ extend(root.object, {
             } else {
                 return set;
             }
+            */
         });
     })()),
     "hasOwnProperty":clos(function ($this, $closure, p) {
@@ -732,6 +738,9 @@ root.array = extendProxy(root.object.createWithPayloadAndMap([], new ProxyMap), 
         else 
             return this.get(n);
     },
+    callPushWith1Arg:function (x) {
+        return this.payload.push(x);
+    }
 });
 extend(root.array, {
     "concat":clos(function ($this, $closure) {
@@ -831,8 +840,8 @@ var root_global = extend(root.object.create(), {
     "print":clos(function ($this, $closure, s) { if (arguments.length === 2) print(); else print(s); }),
     "run":clos(function ($this, $closure, s) { return run(s); }),
     "gc":clos(function ($this, $closure) { gc(); }),
-    "eval":clos(function ($this, $closure, s) { return eval(compile(s)); }),
-    "load":clos(function ($this, $closure, s) { return eval(compile(readFile(s))); }),
+    "eval":clos(function ($this, $closure, s) { return (new Function(compile(s)))(); }),
+    "load":clos(function ($this, $closure, s) { return (new Function(compile(readFile(s))))(); }),
     "parseInt":clos(function ($this, $closure, s, b) { return parseInt(s,b); }),
     "parseFloat":clos(function ($this, $closure, s) { return parseFloat(s); }),
     "readFile":clos(function ($this, $closure, s) { return readFile(s); }),

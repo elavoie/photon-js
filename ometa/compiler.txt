@@ -72,7 +72,7 @@ ometa PhotonASTTraversal {
   igetp    trans:x trans:fd,
   letLambda :args [trans*:values] trans:body,
   icSend   :nb :msg trans:recv trans*:args,
-  wrapExpr :pre :post trans:e
+  wrapExpr :pre :post trans*:es
 }
 
 ometa PhotonASTCopy {
@@ -142,7 +142,7 @@ ometa PhotonASTCopy {
   igetp    trans:x trans:fd                     -> [#igetp, x, fd],
   letLambda :args [trans*:values] trans:body    -> [#letLambda, args, [values], body],
   icSend   :nb :msg trans:recv trans*:args      -> [#icSend, nb, msg, recv].concat(args),
-  wrapExpr :pre :post trans:e                   -> [#wrapExpr, pre, post, e]
+  wrapExpr :pre :post trans*:es                 -> [#wrapExpr, pre, post].concat(es)
 }
 
 ometa PhotonPrettyPrinter 
@@ -1055,6 +1055,9 @@ ometa PhotonICConv <: PhotonASTCopy {
   trans      = [:t apply(t):ans]       -> ans,
   send     :msg?(msg === "__$call__" || msg === "__$apply__") trans:recv trans*:args 
                                        -> [#send, msg, recv].concat(args),
+  //send     #__get__ trans:recv [#string #length] trans*:args       
+  //                                     -> ([#wrapExpr, "(", ".getLength())", recv]),
+  //send     #push trans:recv trans:x end -> ([#wrapExpr, "(", ")", recv, [#wrapExpr, ".payload.push(", ")", x]]),      
   send     :msg 
            trans:recv trans*:args      -> {var nb = PhotonICConv.icCount++;
                                            var argTypes = [recv[0].toProgramString()].concat(args.map(function (x) { return x[0].toProgramString(); }));
@@ -1190,7 +1193,7 @@ ometa PhotonJSCodeGen {
   arguments trans:i                                                -> ("(arguments[" + i + "+2])"),
   arguments_slice trans:i                                          -> ("arr(Array.prototype.slice.call(arguments, " + i + "+2))"),
   igetp    trans:x trans:fd                                        -> ("(" + x + "[" + fd + "])"),
-  wrapExpr :pre :post trans:e                                      -> ("(" + pre + e + post + ")")
+  wrapExpr :pre :post trans*:es                                    -> ("" + pre + (es.join("")) + post + "")
 }
 
 PhotonJSCodeGen.initialize = function () {
