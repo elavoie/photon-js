@@ -348,7 +348,7 @@ tables: ometa/parse-experiment-results.js time-exps mem-exps
 
 v8-baseline-table: ometa/parse-experiment-results.js results/baseline/v8/time/Photon.txt results/baseline/v8/time/SpiderMonkey.txt results/baseline/v8/time/V8.txt
 	./results2latex.sh -v8 --ratio V8/Photon --ratio SpiderMonkey/Photon $(ABRV) results/baseline/v8/time/*.txt > results/baseline/v8/time/table.tex
-	cat latex/minimal-header.tex results/baseline/v8/time/table.tex latex/minimal-footer.tex | pdflatex
+	cat latex/minimal-header.tex results/baseline/v8/time/table.tex latex/minimal-footer.tex | pdflatex && mv texput.pdf results/baseline/v8/time/table.pdf 
 
 
 
