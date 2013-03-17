@@ -105,6 +105,8 @@ V8_EXEC_PATH=$(CURDIR)/deps/v8/d8
 
 PHOTON_EXEC_PATH=$(CURDIR)/photon
 
+SM_EXEC_PATH=$(CURDIR)/deps/js-1.8.5/js/src/js
+
 OMETA_COMPILE_FILES=\
    deps/ometa-js/lib.js                     \
    deps/ometa-js/ometa-base.js              \
@@ -131,7 +133,7 @@ help:
     echo "    photon:        Create executable script for photon";\
     echo "    test:          Test executable with sanity checks";\
 
-install: deps-v8-version deps/v8/d8 deps-sunspider-patched deps/ometa-js
+install: deps-v8-version deps/v8/d8 deps/js/js deps-sunspider-patched deps/ometa-js
 
 latex-results: photon tables
 
@@ -171,6 +173,13 @@ deps-v8-version: deps/v8
 deps/v8/d8: $(HOST_FILES)
 	pushd deps/v8 && scons d8 arch=ia32 I_know_I_should_build_with_GYP=yes && popd
 
+deps/js-1.8.5:
+	pushd deps && wget  http://ftp.mozilla.org/pub/mozilla.org/js/js185-1.0.0.tar.gz && tar -xzf js185-1.0.0.tar.gz && rm js185-1.0.0.tar.gz && popd 
+
+deps/js-1.8.5/js/src/js: deps/js-1.8.5
+	pushd deps/js-1.8.5/js/src && autoconf213 && ./configure && make && popd
+    	
+
 deps/sunspider:
 	svn checkout http://sunspider-mod.googlecode.com/svn/trunk deps/sunspider
 
@@ -181,7 +190,7 @@ deps/sunspider/tests/sunspider-0.9.1/crypto-aes.js.orig: deps/sunspider deps/sun
 deps-sunspider-patched: deps/sunspider/tests/sunspider-0.9.1/crypto-aes.js.orig
 
 
-deps: deps/v8/d8 deps/ometa-js
+deps: deps/v8/d8 deps/ometa-js deps/js/js
 
 
 ometa/compiler.js: ometa/compiler.txt
@@ -248,12 +257,12 @@ results/baseline/sunspider/time/V8.txt: photon ometa/compiler.js perf/obj.js
 
 results/baseline/sunspider/time/Photon.txt: photon ometa/compiler.js perf/obj.js
 	pushd deps/sunspider/; \
-        ./sunspider --shell=photon > ../../results/baseline/sunspider/time/Photon.txt; \
+        ./sunspider --shell=$(PHOTON_EXEC_PATH) > ../../results/baseline/sunspider/time/Photon.txt; \
     popd
 
 results/baseline/sunspider/time/SpiderMonkey.txt: photon ometa/compiler.js perf/obj.js
 	pushd deps/sunspider/; \
-        ./sunspider --shell=js  > ../../results/baseline/sunspider/time/SpiderMonkey.txt; \
+        ./sunspider --shell=$(SM_EXEC_PATH)  > ../../results/baseline/sunspider/time/SpiderMonkey.txt; \
     popd
 
 results/baseline/v8/time/V8.txt: photon ometa/compiler.js perf/obj.js
@@ -268,7 +277,7 @@ results/baseline/v8/time/Photon.txt: photon ometa/compiler.js perf/obj.js
 
 results/baseline/v8/time/SpiderMonkey.txt: photon ometa/compiler.js perf/obj.js
 	pushd benchmarks/v8-v7; \
-        js v8.js  > ../../results/baseline/v8/time/SpiderMonkey.txt; \
+        $(SM_EXEC_PATH) v8.js  > ../../results/baseline/v8/time/SpiderMonkey.txt; \
     popd
 
 
@@ -294,22 +303,22 @@ results/instrumented/sunspider/memory/Photon-fast.txt: photon ometa/compiler.js 
 
 results/instrumented/sunspider/time/Photon-simple.txt: photon ometa/compiler.js perf/obj.js $(SIMPLE_INSTRUMENTATION)
 	pushd deps/sunspider/; \
-        ./sunspider --shell=photon --args=--use_instrumentation=$(SIMPLE_INSTRUMENTATION) > ../../results/instrumented/sunspider/time/Photon-simple.txt; \
+        ./sunspider --shell=$(PHOTON_EXEC_PATH) --args=--use_instrumentation=$(SIMPLE_INSTRUMENTATION) > ../../results/instrumented/sunspider/time/Photon-simple.txt; \
     popd
 
 results/instrumented/v8/time/Photon-simple.txt: photon ometa/compiler.js perf/obj.js $(SIMPLE_INSTRUMENTATION)
 	pushd benchmarks/v8-v7; \
-        photon v8.js --use_instrumentation=$(SIMPLE_INSTRUMENTATION) > ../../results/instrumented/v8/time/Photon-simple.txt; \
+        $(PHOTON_EXEC_PATH) v8.js --use_instrumentation=$(SIMPLE_INSTRUMENTATION) > ../../results/instrumented/v8/time/Photon-simple.txt; \
     popd
 
 results/instrumented/sunspider/time/Photon-fast.txt: photon ometa/compiler.js perf/obj.js $(FAST_INSTRUMENTATION)
 	pushd deps/sunspider/; \
-        ./sunspider --shell=photon --args=--use_instrumentation=$(FAST_INSTRUMENTATION) > ../../results/instrumented/sunspider/time/Photon-fast.txt; \
+        ./sunspider --shell=$(PHOTON_EXEC_PATH) --args=--use_instrumentation=$(FAST_INSTRUMENTATION) > ../../results/instrumented/sunspider/time/Photon-fast.txt; \
     popd
 
 results/instrumented/v8/time/Photon-fast.txt: photon ometa/compiler.js perf/obj.js $(FAST_INSTRUMENTATION)
 	pushd benchmarks/v8-v7; \
-        photon v8.js --use_instrumentation=$(FAST_INSTRUMENTATION) > ../../results/instrumented/v8/time/Photon-fast.txt; \
+        $(PHOTON_EXEC_PATH) v8.js --use_instrumentation=$(FAST_INSTRUMENTATION) > ../../results/instrumented/v8/time/Photon-fast.txt; \
     popd
 
 
