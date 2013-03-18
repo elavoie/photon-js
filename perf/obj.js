@@ -840,7 +840,7 @@ var root_global = extend(root.object.create(), {
     "print":clos(function ($this, $closure, s) { if (arguments.length === 2) print(); else print(s); }),
     "run":clos(function ($this, $closure, s) { return run(s); }),
     "gc":clos(function ($this, $closure) { gc(); }),
-    "eval":clos(function ($this, $closure, s) { return (new Function(compile(s)))(); }),
+    "eval":clos(function ($this, $closure, s) { return (eval(compile(s))); }),
     "load":clos(function ($this, $closure, s) { return (new Function(compile(readFile(s))))(); }),
     "parseInt":clos(function ($this, $closure, s, b) { return parseInt(s,b); }),
     "parseFloat":clos(function ($this, $closure, s) { return parseFloat(s); }),

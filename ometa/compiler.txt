@@ -605,8 +605,9 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                                 [#send, "__get__", 
                                                                                     [#get, id_rcv], 
                                                                                     [#get, id_fd]], 
-                                                                                [#number, 1]]]]]}
-           | trans:x                                          -> [#set, x, [#binop, op, x, [#number, 1]]]),
+                                                                                [#number, 1]]]]]}),
+  //         | trans:x                                          -> [#set, x, [#binop, op, x, [#number, 1]]]),
+  preop    :op trans:x                                        -> [#preop, op, x],
   postop   ( '++' -> "+" | '--' -> "-"):op                     
            ( [#getp trans:rcv trans:fd]:x                     -> {var id_rcv = gensym(); var id_fd = gensym(); var id_r = gensym();
                                                                   [#let, _new_context(),
@@ -627,7 +628,8 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                                     [#binop, op, 
                                                                                         [#get, id_r],
                                                                                         [#number, 1]]],
-                                                                                [#get, id_r]]]]]}
+                                                                                [#get, id_r]]]]]}),
+  /*
            | trans:x                                          -> {var id = gensym();
                                                                   [#let, _new_context(),
                                                                     [#begin, 
@@ -635,6 +637,8 @@ ometa PhotonDesugar <: PhotonASTCopy {
                                                                     [#begin,
                                                                         [#set, x, [#binop, op, [#get, id], [#number, 1]]],
                                                                         [#get, id]]]}),  
+  */
+  postop   :op trans:x                                        -> [#postop, op, x],
   /*
   forIn     ( [#get :name] 
             | [#var :name [#get #undefined]] -> {self.context.declare(name)}) 
@@ -877,7 +881,25 @@ ometa PhotonVarScopeBinding <: PhotonASTCopy {
   let :ctxt [#begin letvar(ctxt.scope)*:vs]
             {self.context.enter_let_scope(ctxt.scope)} 
             trans:body 
-            {self.context.leave_let_scope(ctxt.scope)}           -> [#let, ctxt, [#begin].concat(vs), body]
+            {self.context.leave_let_scope(ctxt.scope)}           -> [#let, ctxt, [#begin].concat(vs), body],
+   postop (( '++' -> "+" | '--' -> "-"):op [#get :id] ({self.context.scope.lookup(id)}):x isGlobal(x) -> {
+                                                                              var x = gensym();
+                                                                              [#let, {scope:local_let_scope(self.context.scope, [x])},
+                                                                                 [#begin, [#var, x, [#send, #__get__, [#ref, "root_global"], [#string, id]]]],
+                                                                                 [#begin,
+                                                                                    [#send, #__set__, [#ref, "root_global"], [#string, id], [#binop, op, [#get, x], [#number, 1]]],
+                                                                                    [#get, x]]];
+                                                                             }
+          | ^postop),
+   preop (:op [#get :id] ({self.context.scope.lookup(id)}):x isGlobal(x) -> {
+                                                                              var x = gensym();
+                                                                              [#let, {scope:local_let_scope(self.context.scope, [x])},
+                                                                                 [#begin, [#var, x, [#send, #__get__, [#ref, "root_global"], [#string, id]]]],
+                                                                                 [#begin,
+                                                                                    [#send, #__set__, [#ref, "root_global"], [#string, id], [#preop, op, [#get, x]]]]];
+                                                                             }
+          | ^preop)
+               
 }
 PhotonVarScopeBinding.forInVarCount = 0;
 
@@ -1138,6 +1160,8 @@ ometa PhotonJSCodeGen {
   string   :s                                                      -> s.toProgramString(),
   unop     ( 'typeof' trans:x                                      -> ("(getTypeof(" + x + "))")
            | :op      trans:x                                      -> ("(" + op + " " +  x + ")")),
+  preop    :op trans:x                                             -> ("(" + op + x + ")"),
+  postop   :op trans:x                                             -> ("(" + x + op + ")"),
   get      "arguments"                                             -> ("$arguments"),
   get      :x                                                      -> x,
   getCell  :x                                                      -> ("(" + x + ".payload)"),
