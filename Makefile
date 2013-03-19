@@ -133,7 +133,7 @@ help:
     echo "    photon:        Create executable script for photon";\
     echo "    test:          Test executable with sanity checks";\
 
-install: deps-v8-version deps/v8/d8 deps/js-1.8.5/js deps-sunspider-patched deps/ometa-js
+install: deps-v8-version deps/v8/d8 deps/js-1.8.5/js/src/js deps-sunspider-patched deps/ometa-js
 
 latex-results: photon tables
 
@@ -190,7 +190,7 @@ deps/sunspider/tests/sunspider-0.9.1/crypto-aes.js.orig: deps/sunspider deps/sun
 deps-sunspider-patched: deps/sunspider/tests/sunspider-0.9.1/crypto-aes.js.orig
 
 
-deps: deps/v8/d8 deps/ometa-js deps/js-1.8.5/js
+deps: deps/v8/d8 deps/ometa-js deps/js-1.8.5/js/src/js
 
 
 ometa/compiler.js: ometa/compiler.txt
