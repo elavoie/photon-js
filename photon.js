@@ -27,6 +27,9 @@ photon.compile = function (s, opts, genTryCatch)
     if (opts.use_ic) {
         if (opts.verbose) print("ICConv");
         ast = PhotonICConv.match(ast, "trans");
+    } else {
+        if (opts.verbose) print("SendConv");
+        ast = PhotonSendConv.match(ast, "trans");
     }
 
     if (opts.verbose) print("LetConv");
@@ -73,6 +76,7 @@ if (arguments.length === 0) {
     print("Usage: ");
     print("    photon <options> file1 file2 ... filek");
     print("Options:");
+    print("    --nouse_ic (Does not generate inline caches for message sends)");
     print("    --use_instrumentation=<file> (Run instrumentation code before files)");
     print("    -o <file> (Output compiled code without running it)");
 }
@@ -83,6 +87,8 @@ for (var i = 0; i < arguments.length; ++i)
         options.verbose = true;
     else if (arguments[i] === "--use_ic")
         options.use_ic = true;
+    else if (arguments[i] === "--nouse_ic")
+        options.use_ic = false;
     else if (arguments[i] === "--trace_ic")
         options.trace_ic = true;
     else if (arguments[i] === "--trace_ic_tracker")

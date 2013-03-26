@@ -1132,6 +1132,40 @@ PhotonICConv.initialize = function () {
 PhotonICConv.icCount = 0;
 PhotonICConv.objPayloadCount = 0;
 
+ometa PhotonSendConv <: PhotonASTCopy {
+  trans      = [:t apply(t):ans]       -> ans,
+  call     trans:fn trans*:args        -> [#send, "call", fn, [#ref, "root_global"]].concat(args),
+  func     :args :ctxt trans:body      -> [#send, "__new__",  [#ref, "root.function"], [#func, args, ctxt, body]],  
+  json     trans*:props                -> {var objPayloadName = "objPayload" + PhotonSendConv.objPayloadCount++;
+                                           var propNames  = props.map(function (b) { return b[1]; });
+                                           var propValues = props.map(function (b) { return b[2]; }); 
+
+                                           var args = [];
+                                           var stmts = [];
+                                           var propNamesStr = [];
+                                           for (var i = 0; i < propNames.length; ++i) {
+                                               args.push("x" + i);
+                                               var str = propNames[i][1].toProgramString();
+                                               stmts.push("    this["+str+ "] = x" + i)
+                                               propNamesStr.push(str);
+                                           }
+                                           var fn = "function (" + args.join(",") + ") {\n" + stmts.join(";\n") + ";\n}";
+                                           var objCreatePre  = "root.object.createWithPayloadAndMap(new " + objPayloadName;
+                                           var objCreatePost = ", " + objPayloadName + ".map)";
+
+                                           this.global_scope.push([#set, [#get, objPayloadName], [#code, fn]], 
+                                                                  [#set, [#code, objPayloadName+".prototype"], [#code, "root.object.payload"]],
+                                                                  [#set, [#code, objPayloadName+".map"], [#code, "getMap(root.object.newMap, [" + propNamesStr.join(",") + "])"]]);
+                                           [#send, "__new__", [#ref, "root.object"], [#wrapExpr, objCreatePre, objCreatePost, [#exprSeq].concat(propValues)]];},
+  arr      trans*:xs                    -> [#send, "__new__", [#ref, "root.array"], [#wrapExpr, "(new ArrayProxy(", "))", [#arr].concat(xs)]],
+  global :ctxt trans:r                  -> [#global, ctxt, [#begin, [#begin].concat(this.global_scope), r]]
+}
+PhotonSendConv.initialize = function () {
+    this.global_scope = [];
+}
+PhotonSendConv.icCount = 0;
+PhotonSendConv.objPayloadCount = 0;
+
 
 ometa PhotonJSCodeGen {
   trans      = [:t apply(t):ans]    -> ans,
