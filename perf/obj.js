@@ -725,7 +725,7 @@ root.array = extendProxy(root.object.createWithPayloadAndMap([], new ProxyMap), 
     },
     toString:function () {
         //return "[ArrayProxy [" + Array.prototype.join.call(this.payload, ",") + "]]";
-        return send(this, "toString");
+        return sendNoCall(this, "toString");
     },
     unbox:function () {
         return this.payload;
@@ -1508,6 +1508,24 @@ function send(rcv, msg) {
     if (!(m instanceof FunctionProxy)) {
         throw new Error("Invalid message " + msg + " for " + rcv);
     }
+    
+    var callFn = m.get("call");
+
+    return callFn.call.apply(callFn, [m, rcv].concat(args));
+}
+
+function sendNoCall(rcv, msg) {
+
+    if (rcv === undefined || rcv === null) throw new Error("send: Unsupported message sending to " + rcv);
+
+    rcv = rcv.box();
+
+    var args = Array.prototype.slice.call(arguments, 2);
+    var m = rcv.get(msg);
+
+    if (!(m instanceof FunctionProxy)) {
+        throw new Error("Invalid message " + msg + " for " + rcv);
+    }
     return m.call.apply(m, [rcv].concat(args));
 }
 
@@ -1563,7 +1581,7 @@ var initState;
         var callFn    = method.get("call");
 
         if (callFn === defaultCall) {
-            var memMethod = send(method, "__memoize__", rcv, method, arr(args), arr(dataCache));
+            var memMethod = sendNoCall(method, "__memoize__", rcv, method, arr(args), arr(dataCache));
 
             if (memMethod !== null) {       
                 var callFn    = memMethod.get("call");

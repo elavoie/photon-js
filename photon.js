@@ -78,7 +78,9 @@ if (arguments.length === 0) {
     print("Options:");
     print("    --nouse_ic (Does not generate inline caches for message sends)");
     print("    --use_instrumentation=<file> (Run instrumentation code before files)");
-    print("    -o <file> (Output compiled code without running it)");
+    print("    --stdout  (Output compiled code on the standard output without running it)");
+    print("    -o <file> (Write compiled code in a file without running it)");
+    
 }
 
 for (var i = 0; i < arguments.length; ++i)
@@ -102,7 +104,10 @@ for (var i = 0; i < arguments.length; ++i)
         undefined;
     else if (arguments[i] === "--gen_function_ids")
         options.gen_function_ids = true;
-    else if (arguments[i] === "-o") {
+    else if (arguments[i] === "--stdout") {
+        options.output_only = true;
+        options.output_name = null;
+    } else if (arguments[i] === "-o") {
         options.output_only = true;
         options.output_name = arguments[++i];
     } else
@@ -131,8 +136,14 @@ for (var i = 0; i < files.length; ++i)
     }
 }
 
-if (options.verbose || options.output_only)
-    writeFile(options.output_name, src);
+if (options.verbose || options.output_only) {
+    if (options.output_name == null) {
+       print(src);
+    } else {
+        writeFile(options.output_name, src);
+    }
+}
+    
 
 if (!options.output_only)
     eval(src);
