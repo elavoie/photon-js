@@ -136,6 +136,11 @@ for (var i = 0; i < files.length; ++i)
     }
 }
 
+if (options.show_instrumentation_results) {
+    src += "// --show_instrumentation_results\n";
+    src += "print(instrumentationResults());\n";
+}
+
 if (options.verbose || options.output_only) {
     if (options.output_name == null) {
        print(src);
@@ -143,10 +148,7 @@ if (options.verbose || options.output_only) {
         writeFile(options.output_name, src);
     }
 }
-    
 
 if (!options.output_only)
     eval(src);
 
-if (options.show_instrumentation_results)
-    print(instrumentationResults());
