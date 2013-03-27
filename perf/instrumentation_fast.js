@@ -80,6 +80,8 @@ var instrumentationData__delete__ = 0;
         ));
         
         return clos(function ($this, $closure, rcv, method, args, dataCache) {
+            return set;
+            /*
             var name = args.get(0)
             var cacheId = dataCache.get(0);
 
@@ -92,6 +94,7 @@ var instrumentationData__delete__ = 0;
             } else {
                 return set;
             }
+            */
         });
     })()));
 
