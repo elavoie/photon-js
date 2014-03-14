@@ -34,9 +34,14 @@ ometa/compiler.js: ometa/compiler.txt
 	bin/ometac ometa/compiler.txt > ometa/compiler.js
 
 bin/photon: $(BIN_FILES)
-	echo "#!/usr/bin/env node --expose_gc" > bin/photon
+	echo "#!"$$(which node)" --expose_gc" > bin/photon
 	cat $(BIN_FILES) >> bin/photon
 	chmod +x bin/photon
+
+bin/ometac: lib/ometac.js 
+	echo "#!"$$(which node) > bin/ometac
+	cat lib/ometac.js >> bin/ometac 
+	chmod +x bin/ometac
 
 lib/photon.js: $(PHOTON_FILES)
 	cat $(PHOTON_FILES) > lib/photon.js

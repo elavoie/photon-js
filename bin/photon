@@ -1,4 +1,4 @@
-#!/usr/bin/env node --expose_gc
+#!/usr/local/bin/node --expose_gc
 // try to use StringBuffer instead of string concatenation to improve performance
 
 function StringBuffer() {
