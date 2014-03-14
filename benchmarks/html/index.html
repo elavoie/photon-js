@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Artifact Description</h1>
+
+<p>This artifact comprises both a source-to-source compiler that enables
+dynamic instrumentation of JavaScript programs and a test runner to run the
+experiments used to obtain the performance results obtained in the evaluation
+section of the paper. Although it is unlikely that the exact configuration we
+used could be replicated, hopefully, our results should mostly hold on similar
+configurations, even with more recent browser versions.</p>
+
+<h2>Photon Source-to-Source Compiler</h2>
+
+<p>The Photon source-to-source compiler has been packaged inside a linux
+virtual machine intended to run on Virtual Box.</p>
+
+<h3>Usage</h3>
+
+<h3>Compiling a Simple JavaScript Program to Run on Photon</h3>
+
+<h3>Recreating the Experiments of the Next Section</h3>
+
+<h3>Providing a Dynamic Instrumentation</h3>
+
+
+<h2>Experiments</h2>
+
+<p>To allow independent replication of performance results without having to
+perform a source-to-source compilation of the benchmarks, we provide versions
+of the benchmarks running both over Photon with different options, and directly
+on the JavaScript virtual machine. All of the benchmarks can be found under
+the 'bench' directory.</p>
+
+<p>Opening the html page of a single benchmark will run it and output the score
+in the developer console of the web browser. In addition, the "benchmark
+runner" links run in a single web page and execute all the benchmarks in a
+separate iframe. When all the benchmarks have been run, a summary of the
+results is written in the page. The number of times a benchmark is run can be
+modified by changing the 'nbRepetitions' variable in the runner page source
+code. The default is 5.</p>
+
+<p>Unfortunately, we have no automatic way of measuring and reporting the
+memory overhead in a portable way. Our results were obtained by running over
+the V8 shell and inspecting the garbage collection traces. To replicate the
+results inside a browser, its developer documentation should be consulted.  We
+suggest running each of the benchmark in a separate page and finding the
+maximum memory usage using the developer tools. In our tests, Photon used
+between 1x and 3x of the space used by the original benchmark, except for
+EarleyBoyer where it used 6.5x (specifically 128MB instead of 20MB).</p>
+
+<h3>Settings</h3>
+
+<p>The results for the JIT versions of Chrome, Safari, and Firefox were
+obtained over vanilla configurations of the latest browser versions at the time
+of writing the first version of the paper (March 2013).</p>
+
+<p>Configuration:
+<ul>
+    <li><b>Safari</b> version 6.0.2 (8536.26.17), based on the Nitro JS VM</li>
+    <li><b>Chrome</b> version 25.0.1364.172, based on the V8 JS VM</li>
+    <li><b>Firefox</b> version 20.0 based on the SpiderMonkey JS VM</li>
+</ul>
+on a computer with 2.6 GHz Intel Core i7 processor and 16 GB 1600 MHz
+DDR3 RAM and running OS X 10.8.2.
+</p>
+
+<p>The results for the Firefox interpreter version were obtained by setting the
+following options to <code>false</code> in <code>about:config</code>:<br>
+<ul>
+    <li><code>ion.content</code></li>    
+    <li><code>methodjit.chrome</code></li>    
+    <li><code>methodjit.content</code></li>    
+    <li><code>typeinference</code></li>    
+</ul>
+
+Note that the name of some of these options have changed in the latest version
+of Firefox (at the time of packaging this artifact, March 2014, the latest version of Firefox is 27.0.1).
+<code>typeinference</code> now has two sub-options for <code>chrome</code> and
+<code>content</code> and <code>methodjit</code> does not exist anymore. Since
+the configuration to use is a moving target, we suggest to ask the options for
+deactivating the JIT on the <a href="irc://irc.mozilla.org/jsapi">#jsapi</a>
+Mozilla IRC channel.</p>
+
+<p>The signification of the acronyms used when reporting results are the following:<br>
+<ul>
+    <li><code>[nophoton]</code>: Benchmark running directly over the JavaScript
+    virtual machine.</li>
+    <li><code>[photon]</code>: Benchmark running over Photon with inline
+    caching and no instrumentation.</li>
+    <li><code>[photon-simple]</code>: Benchmark running over Photon with inline
+    caching and a simple instrumentation that counts the number of property read,
+    written, and deleted during execution. This is a straight-forward
+    implementation.</li>
+    <li><code>[photon-fast]</code>: Benchmark running over Photon with inline
+    caching and an instrumentation that counts the number of property read,
+    written, and deleted during execution, but has been optimized to work well in
+    inline caching.</li>
+    <li><code>[photon-noic]</code>: Benchmark running over Photon with no
+    inline caching and no instrumentation.</li>
+</ul>
+</p>
+
+<h3>Photon vs No-Photon</h3>
+
+<p>For this experiment, we measure the overhead introduced by Photon compared
+to running the benchmarks directly over the JavaScript virtual machine. The
+results used for the paper are given <a href="photon-vs-nophoton-paper.html">here</a>.  
+The experiments can be run by visiting this 
+<a href="photon-vs-nophoton-runner.html">benchmark runner</a>.</p> 
+
+<h3>Photon with a simple instrumentation vs Photon with a fast instrumentation</h3>
+
+<p>For this experiment, we compare the overhead of using Photon with an
+instrumentation that would have been quickly developed without care for
+performance (<a href="instrumentation/simple.js">simple</a>) against the 
+same instrumentation that is optimized for the inline caches 
+(<a href="instrumentation/fast.js">fast</a>). The
+results used for the paper are given <a href="photon-simple-and-fast-vs-photon-paper.html">here</a>.  
+The experiments can be run by visiting this 
+<a href="photon-simple-and-fast-vs-photon-runner.html">benchmark runner</a>.</p> 
+
+<h3>Photon vs Photon with no inline caching</h3>
+<p>For this experiment, we measure the effectiveness of inline caching to
+achieve our performance results, compared to Photon without inline caching. The
+results used for the paper are given <a href="photon-noic-vs-photon-paper.html">here</a>.  
+The experiments can be run by visiting this 
+<a href="photon-noic-vs-photon-runner.html">benchmark runner</a>. 
+Note that the EarleyBoyer benchmark is not run because it uses to
+much memory.
+</p>
+
+</body>
+</html>
+
+

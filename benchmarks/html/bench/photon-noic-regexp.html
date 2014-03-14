@@ -1,0 +1,45 @@
+<html>
+
+<head>
+<title>V8 benchmarks</title>
+
+
+<script>
+
+var bench_setting = "photon-noic";
+var xmlhttp;
+
+if (window.XMLHttpRequest) {
+    xmlhttp = new XMLHttpRequest();
+} else {
+    xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
+}
+
+// Called by NotifyResult function from the V8 benchmark runner
+var printOnPage = function () {
+    var args = Array.prototype.slice.call(arguments).join("");
+    var msg = "[" + bench_setting + "]" + args + "\n";
+    console.log(msg);
+    parent.postMessage(msg, "*");
+}
+
+function chain_bench(bench) {
+    window.open(bench_setting + "-" + bench + ".html");
+}
+
+function onload() {
+    //setTimeout(function () { chain_bench("NEXT"); }, 2000);
+}
+
+</script>
+
+<script src="photon-lib.js"></script>
+
+<script src="photon-noic-regexp.js"></script>
+
+</head>
+
+<body onload="onload();">
+</body>
+
+</html>

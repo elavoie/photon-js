@@ -1,0 +1,31 @@
+This page runs all the benchmarks one-by-one in a separate iframe and reports the results. The summary is provided at the end, when all the benchmarks have run:
+<div id='results'>
+</div>
+<script src="runner.js"></script>
+<script>
+    var configs = [
+        {
+            name: "photon",
+            options: ["", "noic"]
+        }    
+    ];
+    var benchmarks = [
+        "crypto"/*,
+        "deltablue",
+        //"EarleyBoyer",
+        "NavierStokes",
+        "raytrace",
+        "regexp",
+        "richards",
+        "splay"
+        */
+    ];
+    var nbRepetitions = 1;
+
+    function printRatios(breakLine, avg) {
+        return "Ratio [photon/photon-noic]: " + (avg["photon"]/avg["photon-noic"]).toFixed(1) + "x" + breakLine;
+    }
+
+    testList = genTestList(configs, benchmarks);
+    runNextBenchmark(); 
+</script>

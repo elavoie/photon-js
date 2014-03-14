@@ -42,7 +42,7 @@ load('navier-stokes.js');
 var success = true;
 
 function PrintResult(name, result) {
-  print(name + ': ' + result);
+  printOnPage(name + ': ' + result);
 }
 
 
@@ -53,10 +53,12 @@ function PrintError(name, error) {
 
 
 function PrintScore(score) {
+  /*
   if (success) {
     print('----');
     print('Score (version ' + BenchmarkSuite.version + '): ' + score);
   }
+  */
 }
 
 
