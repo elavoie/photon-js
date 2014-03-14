@@ -7,7 +7,7 @@ FILES = \
    ometa/compiler.js \
    lib/runtime.js \
    lib/compiler-support.js \
-   photon.js \
+   lib/api.js \
    lib/main.js
 
 # --------------- User options ------------------------------------------------
