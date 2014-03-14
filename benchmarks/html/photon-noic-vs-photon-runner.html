@@ -10,7 +10,7 @@ This page runs all the benchmarks one-by-one in a separate iframe and reports th
         }    
     ];
     var benchmarks = [
-        "crypto"/*,
+        "crypto",
         "deltablue",
         //"EarleyBoyer",
         "NavierStokes",
@@ -18,9 +18,8 @@ This page runs all the benchmarks one-by-one in a separate iframe and reports th
         "regexp",
         "richards",
         "splay"
-        */
     ];
-    var nbRepetitions = 1;
+    var nbRepetitions = 5;
 
     function printRatios(breakLine, avg) {
         return "Ratio [photon/photon-noic]: " + (avg["photon"]/avg["photon-noic"]).toFixed(1) + "x" + breakLine;

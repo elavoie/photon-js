@@ -23,7 +23,7 @@ This page runs all the benchmarks one-by-one in a separate iframe and reports th
         "richards",
         "splay"
     ];
-    var nbRepetitions = 1;
+    var nbRepetitions = 5;
 
     function printRatios(breakLine, avg) {
         return "Ratio [nophoton/photon]: " + (avg["nophoton"]/avg["photon"]).toFixed(1) + "x" + breakLine;
