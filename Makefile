@@ -1,9 +1,9 @@
 SHELL := /bin/bash
 
 FILES = \
-   deps/ometa-js/lib.js \
-   deps/ometa-js/ometa-base.js \
-   deps/ometa-js/parser.js \
+   deps/ometa-js/lib/lib.js \
+   deps/ometa-js/lib/ometa-base.js \
+   deps/ometa-js/lib/parser.js \
    ometa/compiler.js \
    perf/obj.js \
    lib.js \
@@ -133,11 +133,11 @@ help:
     echo "    photon:        Create executable script for photon";\
     echo "    test:          Test executable with sanity checks";\
 
-install: deps-v8-version deps/v8/d8 deps/js-1.8.5/js/src/js deps-sunspider-patched deps/ometa-js
+install: deps-v8-version deps/v8/d8  deps/ometa-js
 
 latex-results: photon tables
 
-photon: photon-js.js
+photon: photon-js.js bin/photon
 	echo "$(V8_EXEC_PATH) $(CURDIR)/photon-js.js --expose_gc -- \$$@" > photon
 
 test: photon
@@ -149,6 +149,11 @@ test: photon
 
 # --------------- Targets used for internal dependencies ----------------------
 
+bin/photon: $(FILES)
+	echo "#!/usr/bin/env node --expose_gc" > bin/photon
+	cat $(FILES) lib/main.js >> bin/photon
+	chmod +x bin/photon
+    
 deps-dir:
 	mkdir -p deps
 
@@ -174,10 +179,10 @@ deps/v8/d8: $(HOST_FILES)
 	pushd deps/v8 && scons d8 arch=ia32 I_know_I_should_build_with_GYP=yes && popd
 
 deps/js-1.8.5:
-	pushd deps && wget  http://ftp.mozilla.org/pub/mozilla.org/js/js185-1.0.0.tar.gz && tar -xzf js185-1.0.0.tar.gz && rm js185-1.0.0.tar.gz && popd 
+	pushd deps && curl -O  http://ftp.mozilla.org/pub/mozilla.org/js/js185-1.0.0.tar.gz && tar -xzf js185-1.0.0.tar.gz && rm js185-1.0.0.tar.gz && popd 
 
 deps/js-1.8.5/js/src/js: deps/js-1.8.5
-	pushd deps/js-1.8.5/js/src && autoconf213 && ./configure && make && popd
+	pushd deps/js-1.8.5/js/src && autoconf && ./configure && make && popd
     	
 
 deps/sunspider:
@@ -190,7 +195,7 @@ deps/sunspider/tests/sunspider-0.9.1/crypto-aes.js.orig: deps/sunspider deps/sun
 deps-sunspider-patched: deps/sunspider/tests/sunspider-0.9.1/crypto-aes.js.orig
 
 
-deps: deps/v8/d8 deps/ometa-js deps/js-1.8.5/js/src/js
+deps: deps/v8/d8 deps/ometa-js 
 
 
 ometa/compiler.js: ometa/compiler.txt
@@ -201,7 +206,7 @@ ometa/parse-experiment-results.js: deps/v8/d8 deps/ometa-js ometa/parse-experime
 
 photon-js.js: $(FILES)
 	wc -l perf/obj.js | sed -e 's/    \([0-9]*\) .*/\1/g' > perf/loc.txt;
-	cat $(FILES) > photon-js.js;
+	cat $(FILES) lib/v8_main.js > photon-js.js;
 
 
 results/baseline/v8/memory:

@@ -1,1 +1,1 @@
-/Users/erick/Documents/UdeM/Recherche/photon-js/deps/v8/d8 /Users/erick/Documents/UdeM/Recherche/photon-js/photon-js.js --expose_gc -- $@
+/Users/erick/Documents/Recherche/photon-js/deps/v8/d8 /Users/erick/Documents/Recherche/photon-js/photon-js.js --expose_gc -- $@
