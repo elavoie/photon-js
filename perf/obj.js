@@ -4,7 +4,7 @@
 // - 'dataCache'
 // - 'forInVar'
 // ------------------------------ Helper functions and options ------------------------------
-var options = {
+options = {
     verbose:false,
     use_ic:true,
     trace_ic:false,
@@ -13,8 +13,8 @@ var options = {
     show_instrumentation_results:false,
     gen_function_ids:false
 };
-var root = {};
-var nonEnumerable = {
+root = {};
+nonEnumerable = {
     __ctor__:true,
     __delete__:true,
     __get__:true,
@@ -25,7 +25,7 @@ var nonEnumerable = {
 };
 
 // Forward declaration of tracker
-var tracker = {
+tracker = {
     hasCacheLink:function () { return false; }
 }
 
@@ -822,7 +822,7 @@ extend(root.array, {
         return $this;
     }),
 });
-var ArrayProxy = createFastConstructor(root.array);
+ArrayProxy = createFastConstructor(root.array);
 
 root.array.setWithOptions("constructor", extend(clos(function ($this, $closure) {  
     return new ArrayProxy(Array.apply([], Array.prototype.slice.call(arguments, 2)));
@@ -832,7 +832,7 @@ root.array.setWithOptions("constructor", extend(clos(function ($this, $closure) 
 
 
 
-var root_global = extend(root.object.create(), {
+root_global = extend(root.object.create(), {
     "__notUnderstood__":clos(function ($this, $closure, msg, args) {
         throw new Error("ReferenceError: " + msg + " is not defined");
     }),
@@ -905,7 +905,7 @@ var root_global = extend(root.object.create(), {
 });
 
 root.global = root_global; 
-var $this = root.global;
+$this = root.global;
 
 
 root.arguments = extendProxy(root.object.createWithPayloadAndMap([], new ProxyMap), {
@@ -970,7 +970,7 @@ extend(root.arguments, {
     }),
 });
 
-var ArgumentsProxy = createFastConstructor(root.arguments);
+ArgumentsProxy = createFastConstructor(root.arguments);
 
 
 // ------------------------ Primitive values autoboxing ------------------------
@@ -1097,7 +1097,7 @@ root.string = extend(extendProxy(root.object.createWithPayloadAndMap(String.prot
         return String($this);
     }),
 });
-var StringProxy = createFastConstructor(root.string);
+StringProxy = createFastConstructor(root.string);
 
 // Because call1 is used in replace
 ensureCallMethodForArgNb(1);
@@ -1178,7 +1178,7 @@ root.number = extend(extendProxy(root.object.createWithPayloadAndMap(Number.prot
         return $this.unbox().valueOf();
     })
 });
-var NumberProxy = createFastConstructor(root.number);
+NumberProxy = createFastConstructor(root.number);
 
 root_global.set("Number", extend(new FunctionProxy(function ($this, $closure, value) {
     if ($this === root_global || $this === global) {
@@ -1236,7 +1236,7 @@ root.boolean = extend(extendProxy(root.object.createWithPayloadAndMap(Boolean.pr
         return $this.unbox().valueOf();
     })
 });
-var BooleanProxy = createFastConstructor(root.boolean);
+BooleanProxy = createFastConstructor(root.boolean);
 
 root_global.set("Boolean", extend(new FunctionProxy(function ($this, $closure, bool) {
     if ($this === root_global || $this === global) {
@@ -1332,7 +1332,7 @@ root.regexp = extend(extendProxy(root.object.createWithPayloadAndMap(RegExp.prot
         return r === null ? r : arr(r);
     })
 });
-var RegExpProxy = createFastConstructor(root.regexp);
+RegExpProxy = createFastConstructor(root.regexp);
 
 root_global.set("RegExp", extend(new FunctionProxy(function ($this, $closure, regexp, flag) {
     if ($this === root_global || $this === global) {
@@ -1390,7 +1390,7 @@ root.date = extend(extendProxy(root.object.createWithPayloadAndMap(Date.prototyp
         return $this.unbox().getTime();
     }),
 });
-var DateProxy = createFastConstructor(root.date);
+DateProxy = createFastConstructor(root.date);
 
 root_global.set("Date", extend(new FunctionProxy(function ($this, $closure, x0, x1, x2, x3, x4, x5, x6) {
     var payload;
@@ -1458,7 +1458,7 @@ root.error = extend(extendProxy(root.object.createWithPayloadAndMap(Error.protot
         return String($this);
     })
 });
-var ErrorProxy = createFastConstructor(root.error);
+ErrorProxy = createFastConstructor(root.error);
 
 root_global.set("Error", extend(new FunctionProxy(function ($this, $closure, s) {
     if ($this === root_global || $this === global) {
