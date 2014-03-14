@@ -50,7 +50,14 @@ The output should be 55.</p>
 <code>--use_instrumentation=FILE</code> and its results will be printed if
 <code>--show_instrumentation_results</code> is also supplied.<br>
 ex: <code>photon --run --use_instrumentation=instrumentations/simple.js --show_instrumentation_results examples/fib.js</code><br>
+Note that invoking the fib function on Photon does not trigger a global
+property access (__get__) because it will be considered a function call on the
+global object.
 </p> 
+
+<p>An example of property access is <code>examples/for10.js</code>.
+Running this example with the same options will output 10 property accesses
+(__get__).</p>
 
 <h3>Recreating the Experiments of the Next Section</h3>
 
