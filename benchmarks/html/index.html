@@ -14,16 +14,50 @@ configurations, even with more recent browser versions.</p>
 <h2>Photon Source-to-Source Compiler</h2>
 
 <p>The Photon source-to-source compiler has been packaged inside a linux
-virtual machine intended to run on Virtual Box.</p>
+virtual machine intended to run on Virtual Box.<br>
+<ul>
+    <li>VM Username: photon</li>
+    <li>VM Password: photon</li>
+</ul>
+
+The photon system is in the <code>photon-js-ecoop2014</code> directory.<br>
+Alternatively, a copy of the github <a
+href="https://github.com/elavoie/photon-js/tree/ecoop2014">repository</a> can
+be obtained. The system requires <a
+href="http://nodejs.org/download/">NodeJS</a> to run. The <code>photon</code>
+executable can be created by invoking <code>make photon</code> inside the
+repository once NodeJS has been installed.
+</p>
 
 <h3>Usage</h3>
+<p>The compiler can be invoked by running <code>photon</code> from the command line.</p>
 
 <h3>Compiling a Simple JavaScript Program to Run on Photon</h3>
+<p>A source-to-source translation can be performed by invoking photon on a javascript source file:<br>
+ex: <code>photon examples/fib.js</code><br>
+<p>
 
-<h3>Recreating the Experiments of the Next Section</h3>
+<p>The translated program is outputed by default on the standard output.</p>
+
+<p>The program can be run directly on Photon right after the translation by
+adding the <code>--run</code> option when invoking Photon.<br>
+ex: <code>photon --run examples/fib.js</code><br>
+The output should be 55.</p>
 
 <h3>Providing a Dynamic Instrumentation</h3>
 
+<p>A dynamic instrumentation can be supplied with the option
+<code>--use_instrumentation=FILE</code> and its results will be printed if
+<code>--show_instrumentation_results</code> is also supplied.<br>
+ex: <code>photon --run --use_instrumentation=instrumentations/simple.js --show_instrumentation_results examples/fib.js</code><br>
+</p> 
+
+<h3>Recreating the Experiments of the Next Section</h3>
+
+<p>Invoking <code>make html-benchmarks</code> uses Photon to regenerate all the
+benchmarks that are used for the experiment section next. They will be found
+under <code>benchmarks/html/bench</code> and the benchmark runners under
+<code>benchmarks/html</code>.</p>
 
 <h2>Experiments</h2>
 
