@@ -1098,7 +1098,9 @@ Parser = objectThatDelegatesTo(OMeta, {
 "arguments":function(){var $elf=this,_fromIdx=this.input.idx,i;return (function(){i=this._apply("trans");return (("(arguments[" + i) + "+2])")}).call(this)},
 "arguments_slice":function(){var $elf=this,_fromIdx=this.input.idx,i;return (function(){i=this._apply("trans");return (("arr(Array.prototype.slice.call(arguments, " + i) + "+2))")}).call(this)},
 "igetp":function(){var $elf=this,_fromIdx=this.input.idx,x,fd;return (function(){x=this._apply("trans");fd=this._apply("trans");return (((("(" + x) + "[") + fd) + "])")}).call(this)},
-"wrapExpr":function(){var $elf=this,_fromIdx=this.input.idx,pre,post,es;return (function(){pre=this._apply("anything");post=this._apply("anything");es=this._many((function(){return this._apply("trans")}));return (((("" + pre) + es.join("")) + post) + "")}).call(this)}});(PhotonJSCodeGen["initialize"]=(function (){(this["i"]=(0));(this["sp"]=[""]);(this["stmts"]=({"if": true,"while": true,"for": true,"forIn": true,"try": true,"switch": true,"with": true}));(this["ilvl"]=(function (){while((this["i"] >= this["sp"]["length"])){this["sp"].push((this["sp"][(this["sp"]["length"] - (1))] + "    "))};return this["sp"][this["i"]]}))}))}// ------------------------------------------------------------------------------------------
+"wrapExpr":function(){var $elf=this,_fromIdx=this.input.idx,pre,post,es;return (function(){pre=this._apply("anything");post=this._apply("anything");es=this._many((function(){return this._apply("trans")}));return (((("" + pre) + es.join("")) + post) + "")}).call(this)}});(PhotonJSCodeGen["initialize"]=(function (){(this["i"]=(0));(this["sp"]=[""]);(this["stmts"]=({"if": true,"while": true,"for": true,"forIn": true,"try": true,"switch": true,"with": true}));(this["ilvl"]=(function (){while((this["i"] >= this["sp"]["length"])){this["sp"].push((this["sp"][(this["sp"]["length"] - (1))] + "    "))};return this["sp"][this["i"]]}))}))}
+
+// ------------------------------------------------------------------------------------------
 // All global variables with the following prefixes are reserved for the run-time system:
 // - 'codeCache'
 // - 'dataCache'
@@ -1999,6 +2001,9 @@ var root_global = extend(root.object.create(), {
     "unescape":clos(function ($this, $closure, s) {
         return unescape(s);
     }),
+    "console":extend(root.object.create(), {
+        "log":clos(function ($this, $closure, s) { return console.log(s); }),
+    })
 });
 
 root.global = root_global; 
@@ -2629,10 +2634,10 @@ function sendNoCall(rcv, msg) {
     return m.call.apply(m, [rcv].concat(args));
 }
 
-var global      = this;
-var defaultCall = root.function.get("call");
+global      = function () { return this; }(); // Return the global object
+defaultCall = root.function.get("call");
 
-var initState;
+initState = undefined;
 
 (function () {
     var namedMethods = {};
@@ -2817,6 +2822,15 @@ function bailout(rcv, dataCache) {
 })();
 
 
+var options = {
+    verbose:false,
+    use_ic:true,
+    trace_ic:false,
+    trace_ic_tracker:false,
+    use_instrumentation:false,
+    show_instrumentation_results:false,
+    gen_function_ids:false
+};
 var gensym = (function ()
 {
     var i = 0;
@@ -3337,8 +3351,8 @@ var fs = require("fs");
 var src = "";
 var files = [];
 options = options || {};
-options.output_only = false;
-options.output_name = "temp.js";
+options.output_only = true;
+options.output_name = null;
 
 if (process.argv.length === 2) {
     console.log("Usage: ");
@@ -3346,7 +3360,6 @@ if (process.argv.length === 2) {
     console.log("Options:");
     console.log("    --nouse_ic (Does not generate inline caches for message sends)");
     console.log("    --use_instrumentation=<file> (Run instrumentation code before files)");
-    console.log("    --stdout  (Output compiled code on the standard output without running it)");
     console.log("    -o <file> (Write compiled code in a file without running it)");
     
 }
@@ -3372,11 +3385,10 @@ for (var i = 2; i < process.argv.length; ++i)
         options.show_instrumentation_results = true;
     } else if (arg === "-f")
         undefined;
-    else if (arg === "--gen_function_ids")
+    else if (arg === "--run") {
+        options.output_only = false;
+    } else if (arg === "--gen_function_ids") {
         options.gen_function_ids = true;
-    else if (arg === "--stdout") {
-        options.output_only = true;
-        options.output_name = null;
     } else if (arg === "-o") {
         options.output_only = true;
         options.output_name = process.argv[++i];

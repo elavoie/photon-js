@@ -1,3 +1,12 @@
+var options = {
+    verbose:false,
+    use_ic:true,
+    trace_ic:false,
+    trace_ic_tracker:false,
+    use_instrumentation:false,
+    show_instrumentation_results:false,
+    gen_function_ids:false
+};
 var gensym = (function ()
 {
     var i = 0;

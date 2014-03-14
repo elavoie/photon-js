@@ -899,6 +899,9 @@ var root_global = extend(root.object.create(), {
     "unescape":clos(function ($this, $closure, s) {
         return unescape(s);
     }),
+    "console":extend(root.object.create(), {
+        "log":clos(function ($this, $closure, s) { return console.log(s); }),
+    })
 });
 
 root.global = root_global; 
@@ -1529,10 +1532,10 @@ function sendNoCall(rcv, msg) {
     return m.call.apply(m, [rcv].concat(args));
 }
 
-var global      = this;
-var defaultCall = root.function.get("call");
+global      = function () { return this; }(); // Return the global object
+defaultCall = root.function.get("call");
 
-var initState;
+initState = undefined;
 
 (function () {
     var namedMethods = {};
