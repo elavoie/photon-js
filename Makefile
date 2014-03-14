@@ -5,8 +5,8 @@ FILES = \
    ometa/base.js \
    ometa/parser.js \
    ometa/compiler.js \
-   perf/obj.js \
-   lib.js \
+   lib/runtime.js \
+   lib/compiler-support.js \
    photon.js \
    lib/main.js
 
