@@ -1,0 +1,31 @@
+This page runs all the benchmarks one-by-one in a separate iframe and reports the results. The summary is provided at the end, when all the benchmarks have run:
+<div id='results'>
+</div>
+<script src="runner.js"></script>
+<script>
+    var configs = [
+        {
+            name: "photon",
+            options: ["", "simple", "fast"]
+        }    
+    ];
+    var benchmarks = [
+        "crypto",
+        "deltablue",
+        "EarleyBoyer",
+        "NavierStokes",
+        "raytrace",
+        "regexp",
+        "richards",
+        "splay"
+    ];
+    var nbRepetitions = 5;
+
+    function printRatios(breakLine, avg) {
+        return "Ratio [photon/photon-simple]: " + (avg["photon"]/avg["photon-simple"]).toFixed(1) + "x" + breakLine
+        + "Ratio [photon/photon-fast]: " + (avg["photon"]/avg["photon-fast"]).toFixed(1) + "x" + breakLine;
+    }
+
+    testList = genTestList(configs, benchmarks);
+    runNextBenchmark(); 
+</script>
