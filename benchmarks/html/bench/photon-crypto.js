@@ -8706,4 +8706,3 @@ try
 {
     undefined;
 }
-

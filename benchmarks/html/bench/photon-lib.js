@@ -2652,7 +2652,9 @@ initState = undefined;
                 args.push("x"+ i); 
             }
             var body = "    return $this.get(\""+name+"\").call"+argNb+"(" + ["$this"].concat(args).join(",") + ");\n";
-            namedMethods[name][argNb] = Function.apply(null, ["$this", "dataCache"].concat(args).concat([body]));
+             var method = Function.apply(null, ["$this", "dataCache"].concat(args).concat([body]));
+             method.__cachedMethodCall__ = true;
+             namedMethods[name][argNb] = method;
         }
 
         ensureCallMethodForArgNb(argNb);
@@ -2682,6 +2684,9 @@ initState = undefined;
             print(method);
             throw new Error("Invalid message " + msg + " for " + rcv + " at " + codeCacheName);
         }
+        
+        // Record that the cache has been executed
+        global[dataCacheName].__executed__ = true;
 
         var callFn    = method.get("call");
 
