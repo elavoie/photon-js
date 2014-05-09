@@ -21,23 +21,23 @@ for b in $BENCHMARKS; do
    $PHOTON -o temp-$b.js $BENCHMARK_SRC_DIR/base.js $BENCHMARK_SRC_DIR/src/$b.js $BENCHMARK_SRC_DIR/run.js
    cat $photon_lib temp-$b.js > $OUTPUT_DIRECTORY/photon-$b.js
    rm temp-$b.js
-   sed -e "s/SETTING/photon/g" -e "s/BENCHMARK/photon-$b/g" $TEMPLATE > $OUTPUT_DIRECTORY/photon-$b.html
+   sed -e "s/SETTING/photon/g" -e "s/BENCHMARK_TITLE/photon-$b/g" -e "s/BENCHMARK/photon-$b/g" $TEMPLATE > $OUTPUT_DIRECTORY/photon-$b.html
 
    cat $BENCHMARK_SRC_DIR/base.js $BENCHMARK_SRC_DIR/src/$b.js $BENCHMARK_SRC_DIR/run.js > $OUTPUT_DIRECTORY/nophoton-$b.js
-   sed -e "s/SETTING/nophoton/g" -e "s/BENCHMARK/nophoton-$b/g" $TEMPLATE > $OUTPUT_DIRECTORY/nophoton-$b.html
+   sed -e "s/SETTING/nophoton/g" -e "s/BENCHMARK_TITLE/nophoton-$b/g" -e "s/BENCHMARK/nophoton-$b/g" $TEMPLATE > $OUTPUT_DIRECTORY/nophoton-$b.html
 
    $PHOTON -o temp-$b.js $BENCHMARK_SRC_DIR/base.js $BENCHMARK_SRC_DIR/src/$b.js $BENCHMARK_SRC_DIR/run.js --nouse_ic
    cat $photon_lib temp-$b.js > $OUTPUT_DIRECTORY/photon-noic-$b.js
    rm temp-$b.js
-   sed -e "s/SETTING/photon-noic/g" -e "s/BENCHMARK/photon-noic-$b/g" $TEMPLATE > $OUTPUT_DIRECTORY/photon-noic-$b.html
+   sed -e "s/SETTING/photon-noic/g" -e "s/BENCHMARK_TITLE/photon-noic-$b/g" -e "s/BENCHMARK/photon-noic-$b/g" $TEMPLATE > $OUTPUT_DIRECTORY/photon-noic-$b.html
 
    $PHOTON -o temp-$b.js $BENCHMARK_SRC_DIR/base.js $BENCHMARK_SRC_DIR/src/$b.js $BENCHMARK_SRC_DIR/run.js --use_instrumentation=$SIMPLE_INSTRUMENTATION
    cat $photon_lib temp-$b.js > $OUTPUT_DIRECTORY/photon-simple-$b.js
    rm temp-$b.js
-   sed -e "s/SETTING/photon-simple/g" -e "s/BENCHMARK/photon-simple-$b/g" $TEMPLATE > $OUTPUT_DIRECTORY/photon-simple-$b.html
+   sed -e "s/SETTING/photon-simple/g" -e "s/BENCHMARK_TITLE/photon-simple-$b/g" -e "s/BENCHMARK/photon-simple-$b/g" $TEMPLATE > $OUTPUT_DIRECTORY/photon-simple-$b.html
 
    $PHOTON -o temp-$b.js $BENCHMARK_SRC_DIR/base.js $BENCHMARK_SRC_DIR/src/$b.js $BENCHMARK_SRC_DIR/run.js --use_instrumentation=$FAST_INSTRUMENTATION
    cat $photon_lib temp-$b.js > $OUTPUT_DIRECTORY/photon-fast-$b.js
    rm temp-$b.js
-   sed -e "s/SETTING/photon-fast/g" -e "s/BENCHMARK/photon-fast-$b/g" $TEMPLATE > $OUTPUT_DIRECTORY/photon-fast-$b.html
+   sed -e "s/SETTING/photon-fast/g" -e "s/BENCHMARK_TITLE/photon-fast-$b/g" -e "s/BENCHMARK/photon-fast-$b/g" $TEMPLATE > $OUTPUT_DIRECTORY/photon-fast-$b.html
 done

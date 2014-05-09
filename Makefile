@@ -22,7 +22,8 @@ all: help
 
 help:
 	@echo "Options:";\
-    echo "    photon:        Create executable script for photon in bin/";\
+    echo "    photon:          Create executable script for photon in bin/";\
+    echo "    html-benchmarks: Create benchmarks in benchmarks/html/";\
 
 photon: bin/photon lib/photon.js
 
@@ -48,4 +49,4 @@ lib/photon.js: $(PHOTON_FILES)
     
 .PHONY: benchmarks/html/bench
 benchmarks/html/bench: bin/photon lib/photon.js
-	benchmarks/html/go
+	benchmarks/html/generate

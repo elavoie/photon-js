@@ -1,8 +1,8 @@
-var instrumentationResults;
+instrumentationResults = undefined;
 
-var instrumentationData__get__ = 0;
-var instrumentationData__set__ = 0;
-var instrumentationData__delete__ = 0;
+instrumentationData__get__ = 0;
+instrumentationData__set__ = 0;
+instrumentationData__delete__ = 0;
 
 (function () {
     root.object.set("__get__", clos(function ($this, $closure, name) {
